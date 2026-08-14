@@ -48,14 +48,14 @@
   --color-warning-500: #f59e0b;
   --color-warning-700: #b45309;
 
-  /* Colors — Sidebar */
-  --sidebar-bg:       #0f172a;
-  --sidebar-surface:  #1e293b;
-  --sidebar-hover:    #1e3a5f;
-  --sidebar-active:   #1d4ed8;
-  --sidebar-text:     #cbd5e1;
-  --sidebar-muted:    #64748b;
-  --sidebar-border:   #1e293b;
+  /* Colors — Sidebar / Light UI */
+  --sidebar-bg:       #f8fbff;
+  --sidebar-surface:  #edf4ff;
+  --sidebar-hover:    #dfeeff;
+  --sidebar-active:   #2563eb;
+  --sidebar-text:     #12314d;
+  --sidebar-muted:    #5b6885;
+  --sidebar-border:   #dfeafc;
   --sidebar-width:    260px;
 
   /* Typography */
@@ -122,7 +122,7 @@ body {
   font-size: var(--text-base);
   line-height: 1.6;
   color: var(--color-slate-800);
-  background: var(--color-slate-100);
+  background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -301,17 +301,18 @@ body {
 
 /* ── Cards ─────────────────────────────────────────────────────────── */
 .card {
-  background: #fff;
-  border: 1px solid var(--color-slate-200);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: var(--radius-xl);
   padding: var(--space-6);
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--transition-normal), border-color var(--transition-normal);
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.08);
+  transition: box-shadow var(--transition-normal), border-color var(--transition-normal), transform var(--transition-normal);
 }
 
 .card:hover {
-  box-shadow: var(--shadow-md);
-  border-color: var(--color-slate-300);
+  box-shadow: 0 16px 36px rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.2);
+  transform: translateY(-1px);
 }
 
 .card-title {

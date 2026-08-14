@@ -1,18 +1,19 @@
-# Asmeranda AI - Azure-ready Docker Compose (full stack).
+# Azure deployment override file.
 #
-# Versi ini memakai 2 service terpisah (bukan supervisord) untuk
-# konsistensi dengan Azure Container Apps.
-# - backend  : FastAPI (port 8000)
-# - frontend : Next.js  (port 3000)
+# This file is not the default runtime. The canonical runtime remains the stack
+# defined in docker-compose.yml. Azure-specific deployments may use this file as
+# an image-based variant when prebuilt images are already available in ACR.
 #
-# Catatan: gambar (image) harus sudah di-push ke Azure Container
-# Registry (ACR) sebelumnya. Lihat AZURE_DEPLOYMENT_GUIDE.md.
+# Recommended usage:
+#   docker compose -f docker-compose.yml -f docker-compose.azure.yml config
+#
+# or, for direct Azure image deployment after pushing to ACR:
+#   docker compose -f docker-compose.azure.yml up -d
 
 services:
   backend:
-    image: ${ACR_NAME}.azurecr.io/asmeranda:latest
-    container_name: asmeranda-backend
-    restart: unless-stopped
+    image: ${ACR_NAME:-asmeranda}.azurecr.io/asmeranda-backend:latest
+    pull_policy: always
     environment:
       - ASMERANDA_HOST=0.0.0.0
       - ASMERANDA_PORT=8000
@@ -25,39 +26,26 @@ services:
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
     networks:
       - asmeranda-net
-    # entrypoint override: paksa service ini menjalankan uvicorn
-    entrypoint: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
-    expose:
-      - "8000"
 
   frontend:
-    image: ${ACR_NAME}.azurecr.io/asmeranda:latest
-    container_name: asmeranda-frontend
-    restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
+    image: ${ACR_NAME:-asmeranda}.azurecr.io/asmeranda-frontend:latest
+    pull_policy: always
     environment:
       - NODE_ENV=production
       - PORT=3000
       - NEXT_TELEMETRY_DISABLED=1
-      - NEXT_PUBLIC_API_BASE_PATH=/api/v1
+      - NEXT_PUBLIC_API_BASE=http://backend:8000
     ports:
       - "3000:3000"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3000/').status==200 else 1)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    depends_on:
+      backend:
+        condition: service_healthy
     networks:
       - asmeranda-net
-    # entrypoint override: paksa service ini menjalankan next start
-    entrypoint: ["npx", "next", "start", "-p", "3000", "-H", "0.0.0.0"]
-    working_dir: /app/frontend
 
 volumes:
   asmeranda-data:

@@ -14,9 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps — copy requirements dulu agar layer ini bisa di-cache
-COPY requirements-backend.txt ./
-RUN pip install -r requirements-backend.txt
+# Install Python deps — copy the backend requirements file explicitly so the
+# canonical Docker stack resolves the correct app environment.
+COPY ["backend/requirements-backend.txt", "/tmp/requirements-backend.txt"]
+RUN pip install -r /tmp/requirements-backend.txt
 
 # Copy seluruh project source
 COPY . /app

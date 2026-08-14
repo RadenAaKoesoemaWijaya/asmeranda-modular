@@ -199,6 +199,8 @@ npm run dev
 
 **Kebutuhan:** Docker Desktop terinstal
 
+> **Runtime utama yang aktif adalah FastAPI + Next.js.** Streamlit dipertahankan hanya untuk kompatibilitas legacy dan bukan mode default.
+
 ```bash
 docker compose up --build
 ```
@@ -206,6 +208,7 @@ docker compose up --build
 **Akses:** Frontend http://localhost:3000 | Backend http://localhost:8000 | API Docs http://localhost:8000/docs
 
 > Dataset tersimpan di volume Docker `asmeranda-data` dan survive restart container.
+> Untuk Azure, gunakan override `docker-compose.azure.yml` setelah image sudah dibangun dan dipush ke ACR.
 
 ---
 
@@ -341,5 +344,6 @@ Berikut perbaikan dan peningkatan yang telah diterapkan (Juli 2026):
 Software ini adalah produk **proprietary**. Dilarang memperbanyak, mendistribusikan, memodifikasi, atau menggunakan kode ini untuk kepentingan komersial tanpa izin tertulis dari PT. Asmer Sahabat Sukses.
 
 Untuk informasi lisensi, hubungi: **PT. Asmer Sahabat Sukses**.
-#   a s m e r a n d a - m o d u l a r  
+#   a s m e r a n d a - m o d u l a r 
+ 
  
