@@ -1,0 +1,68 @@
+# Asmeranda AI - Azure-ready Docker Compose (full stack).
+#
+# Versi ini memakai 2 service terpisah (bukan supervisord) untuk
+# konsistensi dengan Azure Container Apps.
+# - backend  : FastAPI (port 8000)
+# - frontend : Next.js  (port 3000)
+#
+# Catatan: gambar (image) harus sudah di-push ke Azure Container
+# Registry (ACR) sebelumnya. Lihat AZURE_DEPLOYMENT_GUIDE.md.
+
+services:
+  backend:
+    image: ${ACR_NAME}.azurecr.io/asmeranda:latest
+    container_name: asmeranda-backend
+    restart: unless-stopped
+    environment:
+      - ASMERANDA_HOST=0.0.0.0
+      - ASMERANDA_PORT=8000
+      - ASMERANDA_DATA_DIR=/app/data
+      - ASMERANDA_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    volumes:
+      - asmeranda-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - asmeranda-net
+    # entrypoint override: paksa service ini menjalankan uvicorn
+    entrypoint: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    expose:
+      - "8000"
+
+  frontend:
+    image: ${ACR_NAME}.azurecr.io/asmeranda:latest
+    container_name: asmeranda-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_TELEMETRY_DISABLED=1
+      - NEXT_PUBLIC_API_BASE_PATH=/api/v1
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3000/').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - asmeranda-net
+    # entrypoint override: paksa service ini menjalankan next start
+    entrypoint: ["npx", "next", "start", "-p", "3000", "-H", "0.0.0.0"]
+    working_dir: /app/frontend
+
+volumes:
+  asmeranda-data:
+    driver: local
+
+networks:
+  asmeranda-net:
+    driver: bridge

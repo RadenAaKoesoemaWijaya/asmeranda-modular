@@ -1,0 +1,50 @@
+# Asmeranda Legacy (Streamlit) Requirements
+#
+# File ini untuk menjalankan UI Streamlit legacy (app.py + pages/*.py).
+# Jika Anda hanya ingin menjalankan FastAPI backend, gunakan:
+#   pip install -r requirements-backend.txt
+#
+# Untuk install semua (legacy + backend):
+#   pip install -r requirements.txt -r requirements-backend.txt
+
+# ── Streamlit & UI ─────────────────────────────────────────────
+streamlit>=1.22.0
+streamlit-autorefresh>=1.0.1
+
+# ── Data & Visualization ───────────────────────────────────────
+pandas>=1.5.0
+numpy>=1.23.0
+matplotlib>=3.6.0
+seaborn>=0.12.0
+plotly>=5.10.0
+pillow>=9.2.0
+
+# ── ML ─────────────────────────────────────────────────────────
+scikit-learn>=1.1.0
+xgboost>=1.7.0
+lightgbm>=3.3.0
+catboost>=1.2.0
+shap>=0.41.0
+lime>=0.2.0
+imbalanced-learn
+
+# ── Forecasting ────────────────────────────────────────────────
+statsmodels>=0.13.0
+prophet>=1.1.0
+
+# ── Clustering & Dimensionality ────────────────────────────────
+kmodes
+umap-learn>=0.5.3
+hdbscan>=0.8.29
+
+# ── Advanced ───────────────────────────────────────────────────
+interpret>=0.4.0
+pygad>=3.2.0
+dask[complete]>=2023.1.0
+dask-ml>=2023.3.24
+
+# ── Auth ───────────────────────────────────────────────────────
+bcrypt>=4.0.0
+
+# ── Export ─────────────────────────────────────────────────────
+fpdf

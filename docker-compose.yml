@@ -1,0 +1,58 @@
+# Asmeranda Docker Compose
+#
+# Jalankan: docker compose up --build
+# Buka:
+#   - Frontend: http://localhost:3000
+#   - Backend:  http://localhost:8000
+#   - API docs: http://localhost:8000/docs
+#
+# Environment variables dapat di-override via file .env (salin dari .env.example)
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: asmeranda-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ASMERANDA_HOST=0.0.0.0
+      - ASMERANDA_PORT=8000
+      - ASMERANDA_DATA_DIR=/app/data
+      - ASMERANDA_LOG_LEVEL=INFO
+      - ASMERANDA_DEBUG=false
+      # CORS: izinkan request dari frontend lokal
+      - ASMERANDA_CORS_ORIGINS=["http://localhost:3000"]
+    volumes:
+      - asmeranda-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_BASE=http://backend:8000
+    container_name: asmeranda-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      # URL backend yang diakses DARI DALAM Docker network
+      - NEXT_PUBLIC_API_BASE=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  asmeranda-data:
+    driver: local
