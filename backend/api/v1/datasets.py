@@ -58,17 +58,21 @@ async def upload_dataset(request: Request, file: UploadFile = File(...)) -> Data
         )
         return DatasetUploadResponse(success=True, metadata=meta)
     except ValueError as exc:
-        logger.warning("Upload validation failed: %s", str(exc), extra={"filename": file.filename})
+        logger.warning(
+            "Upload validation failed: %s",
+            str(exc),
+            extra={"dataset_filename": file.filename},
+        )
         return DatasetUploadResponse(success=False, error=str(exc))
     except Exception as exc:
         logger.error(
             "Upload dataset failed unexpectedly",
             exc_info=True,
             extra={
-                "filename": file.filename,
+                "dataset_filename": file.filename,
                 "file_size_mb": len(content) / (1024 * 1024) if content else 0,
-                "error_type": type(exc).__name__
-            }
+                "error_type": type(exc).__name__,
+            },
         )
         return DatasetUploadResponse(success=False, error=f"Internal error: {exc}")
 

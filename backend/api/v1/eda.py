@@ -56,15 +56,13 @@ def correlation(
                 error="Butuh minimal 2 kolom numerik untuk korelasi.",
             )
 
-        # Polars pearson correlation matrix
-        corr = num_df.pearson_corr()
-        # Konversi ke pandas hanya untuk operasi replace/fillna JSON safety yang mudah
-        # atau gunakan Polars fill_nan / fill_null
-        corr_pd = corr.to_pandas().fillna(0.0).replace([np.inf, -np.inf], 0.0)
+        # Pandas provides a stable Pearson correlation matrix for the active
+        # Polars-backed datasets used in this app.
+        corr_pd = num_df.to_pandas().corr(method="pearson").fillna(0.0).replace([np.inf, -np.inf], 0.0)
         matrix = corr_pd.round(4).values.tolist()
         return EdaCorrelationResponse(
             success=True,
-            columns=num_df.columns.tolist(),
+            columns=corr_pd.columns.tolist(),
             matrix=matrix,
         )
     except HTTPException:

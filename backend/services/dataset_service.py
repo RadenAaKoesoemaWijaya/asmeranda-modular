@@ -211,7 +211,7 @@ def ingest(
         "filename": name,
         "rows": int(len(df)),
         "columns": int(len(df.columns)),
-        "column_names": df.columns.tolist(),
+        "column_names": list(df.columns),
         "numerical_columns": numerical_cols,
         "categorical_columns": categorical_cols,
         "datetime_columns": datetime_cols,
