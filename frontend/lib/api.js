@@ -182,6 +182,19 @@ export const api = {
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
     window.open(`${API_BASE}/training/models/${id}/download`, '_blank');
   },
+  // Clustering
+  performClustering: (config) =>
+    apiFetch("/clustering/cluster", { method: "POST", body: JSON.stringify(config) }),
+  findOptimalK: (config) =>
+    apiFetch("/clustering/optimal-k", { method: "POST", body: JSON.stringify(config) }),
+  // Optimization
+  optimizeHyperparameters: (config) =>
+    apiFetch("/optimization/optimize", { method: "POST", body: JSON.stringify(config) }),
+  optimizeHyperparametersSync: (config) =>
+    apiFetch("/optimization/optimize-sync", { method: "POST", body: JSON.stringify(config) }),
+  // Recommendations
+  analyzeDataset: (config) =>
+    apiFetch("/recommendations/analyze", { method: "POST", body: JSON.stringify(config) }),
   // Interpretation
   runShap: (payload) =>
     apiFetch("/interpretation/shap", {

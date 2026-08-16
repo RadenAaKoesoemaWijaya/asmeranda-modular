@@ -24,7 +24,9 @@ const STEPS = [
     can: "preprocessing",
     icon: "⚙️",
   },
+  { href: "/clustering", key: "nav.clustering", can: "preprocessing", icon: "🎯" },
   { href: "/training", key: "nav.training", can: "training", icon: "🧠" },
+  { href: "/optimization", key: "nav.optimization", can: "training", icon: "🔧" },
   { href: "/shap", key: "nav.shap", can: "shap", icon: "📊" },
   { href: "/lime", key: "nav.lime", can: "shap", icon: "🔬" },
   {

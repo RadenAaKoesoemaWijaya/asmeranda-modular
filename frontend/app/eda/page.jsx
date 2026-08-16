@@ -13,6 +13,8 @@ export default function EdaPage() {
   const [corr, setCorr] = useState(null);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState("summary");
+  const [showRecommendations, setShowRecommendations] = useState(false);
+  const [recommendations, setRecommendations] = useState(null);
 
   // Raw Data Pagination State
   const [rawData, setRawData] = useState(null);
@@ -54,6 +56,18 @@ export default function EdaPage() {
     };
   }, [datasetId]);
 
+  async function fetchRecommendations() {
+    try {
+      const r = await api.analyzeDataset({ dataset_id: datasetId });
+      if (r.success) {
+        setRecommendations(r);
+        setShowRecommendations(true);
+      }
+    } catch (e) {
+      console.error("Failed to fetch recommendations:", e);
+    }
+  }
+
   // Load paginated data when tab switches to "data" or page changes
   useEffect(() => {
     if (tab === "data" && datasetId) {
@@ -87,6 +101,53 @@ export default function EdaPage() {
       {error && (
         <div style={{ padding: 12, background: "#fee2e2", color: "#991b1b", borderRadius: 6 }}>
           {error}
+        </div>
+      )}
+
+      <button
+        onClick={fetchRecommendations}
+        style={{
+          marginTop: 12,
+          padding: "8px 16px",
+          background: "#7c3aed",
+          color: "#fff",
+          border: "none",
+          borderRadius: 4,
+        }}
+      >
+        Get AI Recommendations
+      </button>
+
+      {showRecommendations && recommendations && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 16,
+            background: "#f0fdf4",
+            borderRadius: 6,
+            border: "1px solid #16a34a",
+          }}
+        >
+          <h3>AI Recommendations</h3>
+          {recommendations.recommendations && recommendations.recommendations.map((rec, i) => (
+            <div
+              key={i}
+              style={{
+                marginTop: 8,
+                padding: 8,
+                background:
+                  rec.type === "warning"
+                    ? "#fef3c7"
+                    : rec.type === "info"
+                    ? "#dbeafe"
+                    : "#dcfce7",
+                borderRadius: 4,
+              }}
+            >
+              <strong>{rec.title}</strong>
+              <p style={{ margin: "4px 0 0 0" }}>{rec.description}</p>
+            </div>
+          ))}
         </div>
       )}
 

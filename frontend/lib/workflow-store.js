@@ -24,6 +24,8 @@ const DEFAULTS = {
   metrics: null,
   cvScores: null,
   language: "id",
+  clusteringResults: null,
+  optimizationResults: null,
 };
 
 export const useWorkflow = create(
@@ -48,6 +50,8 @@ export const useWorkflow = create(
           modelType: null,
           metrics: null,
           cvScores: null,
+          clusteringResults: null,
+          optimizationResults: null,
         }),
       resetTraining: () =>
         set({
@@ -55,6 +59,8 @@ export const useWorkflow = create(
           modelType: null,
           metrics: null,
           cvScores: null,
+          clusteringResults: null,
+          optimizationResults: null,
         }),
 
       canProceedTo: (step) => {
@@ -67,7 +73,11 @@ export const useWorkflow = create(
               !!s.datasetId &&
               (s.numericalColumns.length > 0 || s.categoricalColumns.length > 0)
             );
+          case "clustering":
+            return !!s.stateId && !!s.problemType;
           case "training":
+            return !!s.stateId && !!s.problemType;
+          case "optimization":
             return !!s.stateId && !!s.problemType;
           case "shap":
           case "lime":

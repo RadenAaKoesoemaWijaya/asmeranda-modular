@@ -9,7 +9,9 @@ const DICT = {
     "nav.upload": "Upload Data",
     "nav.eda": "Eksplorasi Data",
     "nav.preprocessing": "Preprocessing",
+    "nav.clustering": "Clustering",
     "nav.training": "Pelatihan Model",
+    "nav.optimization": "Optimasi Hyperparameter",
     "nav.shap": "SHAP",
     "nav.lime": "LIME",
     "nav.timeseries": "Time Series",
@@ -63,6 +65,8 @@ const DICT = {
     "timeseries.method": "Metode",
     "timeseries.anomalies": "Deteksi Anomali",
     "timeseries.contamination": "Contamination",
+    "clustering.title": "Analisis Clustering",
+    "optimization.title": "Optimasi Hyperparameter",
   },
   en: {
     "app.title": "Asmeranda AI",
@@ -70,7 +74,9 @@ const DICT = {
     "nav.upload": "Data Upload",
     "nav.eda": "EDA",
     "nav.preprocessing": "Preprocessing",
+    "nav.clustering": "Clustering",
     "nav.training": "Model Training",
+    "nav.optimization": "Hyperparameter Optimization",
     "nav.shap": "SHAP",
     "nav.lime": "LIME",
     "nav.timeseries": "Time Series",
@@ -124,6 +130,8 @@ const DICT = {
     "timeseries.method": "Method",
     "timeseries.anomalies": "Anomaly Detection",
     "timeseries.contamination": "Contamination",
+    "clustering.title": "Clustering Analysis",
+    "optimization.title": "Hyperparameter Optimization",
   },
 };
 

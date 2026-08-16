@@ -149,3 +149,57 @@ class PredictionResponse(BaseModel):
     predictions: Optional[List[Any]] = None
     probabilities: Optional[List[List[float]]] = None
     error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Clustering
+# ---------------------------------------------------------------------------
+class ClusteringConfig(BaseModel):
+    state_id: str
+    method: str = "kmeans"  # kmeans, dbscan, hierarchical, spectral
+    parameters: Dict[str, Any] = {}
+
+
+class ClusteringResponse(BaseModel):
+    success: bool
+    labels: Optional[List[int]] = None
+    metrics: Optional[Dict[str, Any]] = None
+    method: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Optimization
+# ---------------------------------------------------------------------------
+class OptimizationConfig(BaseModel):
+    state_id: str
+    model_type: str = "RandomForest"
+    problem_type: str = "Classification"
+    method: str = "grid_search"  # grid_search, random_search, bayesian
+    cv_folds: int = 5
+    n_iter: int = 50  # for random_search and bayesian
+
+
+class OptimizationResponse(BaseModel):
+    success: bool
+    best_params: Optional[Dict[str, Any]] = None
+    best_score: Optional[float] = None
+    method: Optional[str] = None
+    cv_results: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Recommendations
+# ---------------------------------------------------------------------------
+class RecommendationRequest(BaseModel):
+    dataset_id: str
+
+
+class RecommendationResponse(BaseModel):
+    success: bool
+    recommendations: Optional[List[Dict[str, Any]]] = None
+    dataset_info: Optional[Dict[str, Any]] = None
+    preprocessing_steps: Optional[List[str]] = None
+    error: Optional[str] = None
