@@ -1,10 +1,6 @@
 """Asmeranda backend entrypoint (FastAPI app)."""
 from __future__ import annotations
 
-# Setup imports for both Docker and local development
-import import_helper
-import_helper.setup_imports()
-
 import logging
 import sys
 from pathlib import Path
