@@ -18,6 +18,9 @@ RUN pip install --no-cache-dir -r requirements-backend.txt
 # Copy entire project structure
 COPY . .
 
+# Set PYTHONPATH to include both project root and backend directory
+ENV PYTHONPATH=/project:$PYTHONPATH
+
 # Create data directory
 RUN mkdir -p /project/data
 

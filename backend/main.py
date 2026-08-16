@@ -5,6 +5,16 @@ import logging
 import sys
 from pathlib import Path
 
+# Setup sys.path for both local development and Docker
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+# Setup sys.path for both local development and Docker
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 # Agar ``import core.state`` dll bisa resolve ke project root.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
@@ -16,18 +26,31 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from api.v1 import (
-    datasets,
-    eda,
-    health,
-    interpretation,
-    preprocessing,
-    timeseries,
-    training,
-    ws,
-)
-
-from core.config import settings
+# Use relative imports for Docker compatibility
+try:
+    from backend.api.v1 import (
+        datasets,
+        eda,
+        health,
+        interpretation,
+        preprocessing,
+        timeseries,
+        training,
+        ws,
+    )
+    from backend.core.config import settings
+except ImportError:
+    from api.v1 import (
+        datasets,
+        eda,
+        health,
+        interpretation,
+        preprocessing,
+        timeseries,
+        training,
+        ws,
+    )
+    from core.config import settings
 
 
 def create_app() -> FastAPI:

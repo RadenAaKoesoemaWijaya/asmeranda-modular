@@ -8,11 +8,11 @@ const nextConfig = {
   // Proxy API ke backend — menghindari CORS di development dan production
   async rewrites() {
     // API base path configuration:
-    // - Local development: http://localhost:8001
+    // - Local development: http://localhost:8000
     // - Docker: http://backend:8000 (Docker network)
     // - Cloud: Production URL from environment variable
     const apiBase =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
     
     // If using Docker network, use the service name
     const dockerApiBase = process.env.DOCKER_API_BASE || "http://backend:8000";

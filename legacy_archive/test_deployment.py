@@ -10,7 +10,7 @@ print("=== Deployment Testing ===\n")
 # Test Backend Health
 print("1. Testing Backend Health...")
 try:
-    r = requests.get("http://localhost:8001/health")
+    r = requests.get("http://localhost:8000/health")
     print(f"   Status: {r.status_code}")
     print(f"   Response: {r.json()}")
     backend_healthy = r.status_code == 200
@@ -21,7 +21,7 @@ except Exception as e:
 # Test Backend OpenAPI
 print("\n2. Testing Backend OpenAPI...")
 try:
-    r = requests.get("http://localhost:8001/openapi.json")
+    r = requests.get("http://localhost:8000/openapi.json")
     data = r.json()
     print(f"   Total endpoints: {len(data['paths'])}")
     
@@ -49,7 +49,7 @@ except Exception as e:
 # Test Clustering Endpoint Directly
 print("\n3. Testing Clustering Endpoint...")
 try:
-    r = requests.post("http://localhost:8001/api/v1/preprocessing/cluster", 
+    r = requests.post("http://localhost:8000/api/v1/preprocessing/cluster", 
                       json={"state_id": "test", "method": "kmeans", "parameters": {"n_clusters": 3}})
     print(f"   Status: {r.status_code}")
     print(f"   Response: {r.text[:200]}")
@@ -61,7 +61,7 @@ except Exception as e:
 # Test Optimization Endpoint Directly
 print("\n4. Testing Optimization Endpoint...")
 try:
-    r = requests.post("http://localhost:8001/api/v1/training/optimize-sync",
+    r = requests.post("http://localhost:8000/api/v1/training/optimize-sync",
                       json={"state_id": "test", "model_type": "RandomForest", 
                             "problem_type": "Classification", "method": "grid_search", "cv_folds": 3})
     print(f"   Status: {r.status_code}")
@@ -74,7 +74,7 @@ except Exception as e:
 # Test Recommendations Endpoint Directly
 print("\n5. Testing Recommendations Endpoint...")
 try:
-    r = requests.post("http://localhost:8001/api/v1/eda/analyze",
+    r = requests.post("http://localhost:8000/api/v1/eda/analyze",
                       json={"dataset_id": "test"})
     print(f"   Status: {r.status_code}")
     print(f"   Response: {r.text[:200]}")
