@@ -7,7 +7,7 @@
  * - Untuk endpoint biasa, gunakan `apiFetch`
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "http://localhost:8001/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
 
 export class ApiError extends Error {
   constructor(message, status, payload) {
@@ -179,7 +179,7 @@ export const api = {
       body: JSON.stringify({ data }) 
     }),
   downloadModel: (id) => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "http://localhost:8001/api/v1";
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
     window.open(`${API_BASE}/training/models/${id}/download`, '_blank');
   },
   // Clustering (using preprocessing endpoints)

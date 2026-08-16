@@ -54,7 +54,7 @@ def _build_settings():
 
             # Server
             host: str = "0.0.0.0"
-            port: int = 8000
+            port: int = 8001
 
             # CORS
             cors_origins: List[str] = ["*"]
@@ -86,7 +86,7 @@ def _build_settings():
         app_version: str = "0.1.0"
         debug: bool = False
         host: str = "0.0.0.0"
-        port: int = 8000
+        port: int = 8001
         cors_origins: List[str] = None  # type: ignore
         data_dir: Path = PROJECT_ROOT / "data"
         max_upload_size_mb: int = 200

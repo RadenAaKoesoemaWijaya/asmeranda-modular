@@ -7,19 +7,25 @@ const nextConfig = {
 
   // Proxy API ke backend — menghindari CORS di development dan production
   async rewrites() {
-    // Di Docker: NEXT_PUBLIC_API_BASE = http://backend:8000 (Docker network)
-    // Di Vercel: NEXT_PUBLIC_API_BASE = URL Railway/Render production
-    // Di lokal:  tidak perlu diset, default ke localhost:8000
+    // API base path configuration:
+    // - Local development: http://localhost:8001
+    // - Docker: http://backend:8000 (Docker network)
+    // - Cloud: Production URL from environment variable
     const apiBase =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001";
+    
+    // If using Docker network, use the service name
+    const dockerApiBase = process.env.DOCKER_API_BASE || "http://backend:8000";
+    const finalApiBase = process.env.DOCKER_MODE === "true" ? dockerApiBase : apiBase;
+    
     return [
       {
         source: "/api/:path*",
-        destination: `${apiBase}/api/:path*`,
+        destination: `${finalApiBase}/api/:path*`,
       },
       {
         source: "/health",
-        destination: `${apiBase}/health`,
+        destination: `${finalApiBase}/health`,
       },
     ];
   },

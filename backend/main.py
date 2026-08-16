@@ -17,14 +17,11 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from backend.api.v1 import (
-    clustering,
     datasets,
     eda,
     health,
     interpretation,
-    optimization,
     preprocessing,
-    recommendations,
     timeseries,
     training,
     ws,
@@ -76,24 +73,15 @@ def create_app() -> FastAPI:
     )
     app.include_router(training.router, prefix="/api/v1/training", tags=["training"])
     
-    # New routers for Phase 1 - Use simple direct inclusion
-    if clustering.router:
-        app.include_router(
-            clustering.router, prefix="/api/v1/clustering", tags=["clustering"]
-        )
-        logger.info("Clustering router included")
+    # Note: Phase 1 endpoints are integrated into existing routers for immediate functionality:
+    # - Clustering: Integrated into preprocessing router (/api/v1/preprocessing/cluster, /optimal-k)
+    # - Optimization: Integrated into training router (/api/v1/training/optimize, /optimize-sync)
+    # - Recommendations: Integrated into EDA router (/api/v1/eda/analyze)
     
-    if optimization.router:
-        app.include_router(
-            optimization.router, prefix="/api/v1/optimization", tags=["optimization"]
-        )
-        logger.info("Optimization router included")
-    
-    if recommendations.router:
-        app.include_router(
-            recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"]
-        )
-        logger.info("Recommendations router included")
+    # Standalone routers for future use (disabled for now to avoid conflicts)
+    # app.include_router(clustering.router, prefix="/api/v1/clustering", tags=["clustering"])
+    # app.include_router(optimization.router, prefix="/api/v1/optimization", tags=["optimization"])
+    # app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"])
     
     app.include_router(
         interpretation.router,
