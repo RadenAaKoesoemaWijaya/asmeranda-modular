@@ -72,6 +72,50 @@ def _silent_display(error_info: Dict[str, Any]) -> None:
     return None
 
 
+def format_error_info(
+    exception: Exception,
+    context: str = "",
+    user_message: Optional[str] = None,
+    suggestions: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Format exception into structured error information.
+    
+    Parameters
+    ----------
+    exception : Exception
+        The exception to format
+    context : str
+        Context where the error occurred
+    user_message : str, optional
+        Custom user-friendly message
+    suggestions : list, optional
+        List of suggestions for fixing the error
+    
+    Returns
+    -------
+    dict
+        Structured error information
+    """
+    import datetime
+    
+    error_info = {
+        "message": user_message or str(exception),
+        "context": context,
+        "timestamp": datetime.datetime.now().isoformat(),
+        "technical_details": {
+            "exception_type": type(exception).__name__,
+            "exception_message": str(exception),
+            "traceback": traceback.format_exc() if exception else None,
+        },
+    }
+    
+    if suggestions:
+        error_info["suggestions"] = suggestions
+    
+    return error_info
+
+
 # ---------------------------------------------------------------------------
 # ErrorHandler
 # ---------------------------------------------------------------------------

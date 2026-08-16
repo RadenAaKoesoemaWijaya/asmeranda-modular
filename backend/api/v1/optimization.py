@@ -6,9 +6,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from backend.schemas.models import OptimizationConfig, OptimizationResponse
 from backend.services.optimization_service import OptimizationService
@@ -16,7 +14,6 @@ from core.state import get_state
 
 logger = logging.getLogger("asmeranda.api.optimization")
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 optimization_service = OptimizationService()
 
 
@@ -84,9 +81,8 @@ def _optimization_background(
 
 
 @router.post("/optimize", response_model=OptimizationResponse)
-@limiter.limit("5/minute")
 def optimize_hyperparameters(
-    config: OptimizationConfig, background_tasks: BackgroundTasks, request: Request
+    config: OptimizationConfig, background_tasks: BackgroundTasks
 ) -> OptimizationResponse:
     """Perform hyperparameter optimization (async background task)."""
     try:
@@ -162,8 +158,7 @@ def optimize_hyperparameters(
 
 
 @router.post("/optimize-sync", response_model=OptimizationResponse)
-@limiter.limit("2/minute")
-def optimize_hyperparameters_sync(config: OptimizationConfig, request: Request) -> OptimizationResponse:
+def optimize_hyperparameters_sync(config: OptimizationConfig) -> OptimizationResponse:
     """Perform hyperparameter optimization (synchronous, for smaller datasets)."""
     try:
         # Get data from state

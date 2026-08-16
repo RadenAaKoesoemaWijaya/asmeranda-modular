@@ -6,9 +6,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from fastapi import APIRouter, HTTPException
 
 from backend.schemas.models import RecommendationRequest, RecommendationResponse
 from backend.services.recommendation_service import RecommendationService
@@ -16,13 +14,11 @@ from backend.services import dataset_service
 
 logger = logging.getLogger("asmeranda.api.recommendations")
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 recommendation_service = RecommendationService()
 
 
 @router.post("/analyze", response_model=RecommendationResponse)
-@limiter.limit("20/minute")
-def analyze_dataset(config: RecommendationRequest, request: Request) -> RecommendationResponse:
+def analyze_dataset(config: RecommendationRequest) -> RecommendationResponse:
     """Analyze dataset and provide AI-powered recommendations."""
     try:
         dataset_id = config.dataset_id

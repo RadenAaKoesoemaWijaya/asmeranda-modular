@@ -75,15 +75,26 @@ def create_app() -> FastAPI:
         preprocessing.router, prefix="/api/v1/preprocessing", tags=["preprocessing"]
     )
     app.include_router(training.router, prefix="/api/v1/training", tags=["training"])
-    app.include_router(
-        clustering.router, prefix="/api/v1/clustering", tags=["clustering"]
-    )
-    app.include_router(
-        optimization.router, prefix="/api/v1/optimization", tags=["optimization"]
-    )
-    app.include_router(
-        recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"]
-    )
+    
+    # New routers for Phase 1 - Use simple direct inclusion
+    if clustering.router:
+        app.include_router(
+            clustering.router, prefix="/api/v1/clustering", tags=["clustering"]
+        )
+        logger.info("Clustering router included")
+    
+    if optimization.router:
+        app.include_router(
+            optimization.router, prefix="/api/v1/optimization", tags=["optimization"]
+        )
+        logger.info("Optimization router included")
+    
+    if recommendations.router:
+        app.include_router(
+            recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"]
+        )
+        logger.info("Recommendations router included")
+    
     app.include_router(
         interpretation.router,
         prefix="/api/v1/interpretation",
@@ -93,6 +104,14 @@ def create_app() -> FastAPI:
         timeseries.router, prefix="/api/v1/timeseries", tags=["timeseries"]
     )
     app.include_router(ws.router, prefix="/api/v1/ws", tags=["websocket"])
+
+    # Debug: Print all routes
+    logger.info("Registered routes:")
+    for route in app.routes:
+        if hasattr(route, 'path'):
+            logger.info(f"  {route.path}")
+        elif hasattr(route, 'prefix'):
+            logger.info(f"  Router: {route.prefix}")
 
     @app.get("/", include_in_schema=False)
     def root():
