@@ -147,8 +147,17 @@ class ErrorHandler:
         error: Exception,
         context: str = "",
         user_message: Optional[str] = None,
+        language: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Handle errors with proper logging and user messages."""
+        """Handle errors with proper logging and user messages.
+
+        Optional `language` overrides the handler's language for this call.
+        """
+        # Temporarily override language if provided
+        prev_language = self.language
+        if language:
+            self.language = language
+
         self.logger.error(f"Error in {context}: {error}")
 
         # Log to database if available - tidak boleh crash kalau gagal
@@ -175,15 +184,22 @@ class ErrorHandler:
         if user_message is None:
             user_message = self._get_user_message(error_type, str(error))
 
+        # Include exception type in technical details for tests that assert on it
+        technical_details = f"{type(error).__name__}: {str(error)}\n{traceback.format_exc()}"
+
         error_info: Dict[str, Any] = {
             "type": error_type,
             "message": user_message,
-            "technical_details": str(error),
+            "technical_details": technical_details,
             "context": context,
             "traceback": traceback.format_exc(),
             "timestamp": pd.Timestamp.now(),
             "suggestions": self._get_suggestions(error_type),
         }
+
+        # Restore previous language after building message
+        if language:
+            self.language = prev_language
 
         # Panggil display callback (default = streamlit atau silent)
         try:
@@ -308,3 +324,14 @@ class ErrorHandler:
                 "error": f"Validation failed for parameter '{param_name}': {e}",
                 "value": value,
             }
+
+
+def format_error_info(error: Optional[Exception], context: str = "", user_message: Optional[str] = None, language: str = "id") -> Optional[Dict[str, Any]]:
+    """Helper to create an error_info dict without needing to instantiate ErrorHandler everywhere.
+
+    Returns None if error is None to accommodate edge-case tests.
+    """
+    if error is None:
+        return None
+    handler = ErrorHandler(language=language)
+    return handler.handle_error(error, context=context, user_message=user_message)
