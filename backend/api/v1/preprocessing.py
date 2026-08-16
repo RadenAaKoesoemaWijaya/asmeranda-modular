@@ -31,6 +31,8 @@ def run_preprocessing(config: PreprocessingConfig) -> PreprocessingResponse:
             target_column=result["target_column"],
             problem_type=result["problem_type"],
             preprocessing_steps=result["preprocessing_steps"],
+            feature_selection_info=result.get("feature_selection_info"),
+            imbalance_handling_info=result.get("imbalance_handling_info"),
         )
     except Exception as exc:
         logger.exception("Preprocessing gagal")

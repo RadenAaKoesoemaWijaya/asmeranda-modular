@@ -6,13 +6,21 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any, Dict
+from pathlib import Path
+
+import pandas as pd
 
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+from fastapi.responses import FileResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from backend.schemas.models import TrainingConfig, TrainingResponse
-from backend.services import training_service
+from backend.schemas.models import (
+    TrainingConfig, TrainingResponse, EvaluationConfig, 
+    EvaluationResponse, PredictionRequest, PredictionResponse
+)
+from backend.services import training_service, evaluation_service
+from backend.core.config import settings
 from core.state import get_state
 
 logger = logging.getLogger("asmeranda.api.training")
@@ -171,3 +179,121 @@ def delete_model(model_id: str):
     if not ok:
         raise HTTPException(status_code=404, detail=f"Model {model_id} tidak ditemukan")
     return {"success": True, "model_id": model_id, "deleted": True}
+
+
+@router.get("/models/{model_id}/download")
+def download_model(model_id: str):
+    """Download trained model sebagai .pkl file."""
+    model_dir = Path(settings.data_dir) / "models"
+    model_path = model_dir / f"{model_id}.pkl"
+    
+    if not model_path.exists():
+        raise HTTPException(status_code=404, detail="Model tidak ditemukan")
+    
+    return FileResponse(
+        path=model_path,
+        filename=f"model_{model_id}.pkl",
+        media_type="application/octet-stream"
+    )
+
+
+@router.post("/models/{model_id}/predict", response_model=PredictionResponse)
+def predict_with_model(model_id: str, request: PredictionRequest):
+    """Gunakan trained model untuk prediksi data baru."""
+    # Load model
+    model_data = training_service.load_model(model_id)
+    if model_data is None:
+        raise HTTPException(status_code=404, detail="Model tidak ditemukan")
+    
+    model = model_data["model"]
+    feature_names = model_data.get("feature_names", [])
+    problem_type = model_data.get("problem_type", "Classification")
+    
+    try:
+        # Convert input data to DataFrame
+        input_df = pd.DataFrame(request.data)
+        
+        # Ensure all required features are present
+        missing_features = set(feature_names) - set(input_df.columns)
+        if missing_features:
+            # Add missing features with zeros
+            for feat in missing_features:
+                input_df[feat] = 0
+        
+        # Align columns
+        X_new = input_df[feature_names]
+        
+        # Convert to numeric
+        X_new = X_new.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        
+        # Make predictions
+        predictions = model.predict(X_new)
+        
+        # Get probabilities if available
+        probabilities = None
+        if problem_type == "Classification" and hasattr(model, "predict_proba"):
+            try:
+                probabilities = model.predict_proba(X_new).tolist()
+            except Exception:
+                pass
+        
+        return PredictionResponse(
+            success=True,
+            predictions=predictions.tolist(),
+            probabilities=probabilities
+        )
+        
+    except Exception as e:
+        logger.error(f"Prediction error for model {model_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
+
+@router.post("/evaluate")
+def evaluate_with_state(config: EvaluationConfig):
+    """Evaluate model using state data (requires state_id in config)."""
+    state_id = getattr(config, 'state_id', None)
+    model_id = getattr(config, 'model_id', None)
+    
+    if not state_id or not model_id:
+        raise HTTPException(
+            status_code=400, 
+            detail="Both state_id and model_id are required for evaluation"
+        )
+    
+    # Get state with test data
+    state = get_state(state_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="State tidak ditemukan")
+    
+    X_test = state.get("X_test")
+    y_test = state.get("y_test")
+    problem_type = state.get("problem_type", "Classification")
+    
+    if X_test is None or y_test is None:
+        raise HTTPException(
+            status_code=400, 
+            detail="Test data tidak tersedia di state"
+        )
+    
+    # Use evaluation service
+    try:
+        result = evaluation_service.evaluate_model(
+            model_id=model_id,
+            X_test=X_test,
+            y_test=y_test,
+            problem_type=problem_type,
+            plot_types=config.plot_types
+        )
+        
+        if not result.get("success"):
+            return EvaluationResponse(success=False, error=result.get("error"))
+        
+        return EvaluationResponse(
+            success=True,
+            model_id=model_id,
+            metrics=result.get("metrics"),
+            plots=result.get("plots")
+        )
+    except Exception as e:
+        logger.error(f"Evaluation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")

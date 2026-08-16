@@ -130,6 +130,131 @@ def _encode(
     return X, info
 
 
+def _feature_selection(
+    X: pd.DataFrame,
+    y: Optional[pd.Series],
+    method: str,
+    max_features: int,
+    threshold: float,
+) -> Tuple[pd.DataFrame, List[str], Dict[str, Any]]:
+    """Feature selection menggunakan berbagai metode."""
+    info: Dict[str, Any] = {"method": method, "selected_features": []}
+    
+    if method == "none" or not method:
+        return X, X.columns.tolist(), info
+    
+    try:
+        from sklearn.feature_selection import (
+            VarianceThreshold, SelectKBest, f_classif, f_regression,
+            RFE, SelectFromModel
+        )
+        from sklearn.ensemble import RandomForestClassifier
+    except ImportError:
+        # Jika sklearn tidak tersedia, return original
+        return X, X.columns.tolist(), info
+    
+    X_numeric = X.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    
+    if method == "variance":
+        selector = VarianceThreshold(threshold=threshold)
+        X_selected = selector.fit_transform(X_numeric)
+        selected_features = X_numeric.columns[selector.get_support()].tolist()
+        X_selected = pd.DataFrame(X_selected, columns=selected_features, index=X.index)
+        info["selected_features"] = selected_features
+        return X_selected, selected_features, info
+        
+    elif method == "correlation":
+        # Remove highly correlated features
+        corr_matrix = X_numeric.corr().abs()
+        upper = corr_matrix.where(
+            np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
+        )
+        to_drop = [
+            column for column in upper.columns 
+            if any(upper[column] > threshold)
+        ]
+        X_selected = X_numeric.drop(columns=to_drop)
+        selected_features = X_selected.columns.tolist()
+        info["selected_features"] = selected_features
+        info["dropped_features"] = to_drop
+        return X_selected, selected_features, info
+        
+    elif method == "kbest":
+        if y is None:
+            return X, X.columns.tolist(), info
+        score_func = f_classif if y.dtype == 'object' or y.nunique() < 10 else f_regression
+        k = min(max_features, X_numeric.shape[1])
+        selector = SelectKBest(score_func=score_func, k=k)
+        X_selected = selector.fit_transform(X_numeric, y)
+        selected_features = X_numeric.columns[selector.get_support()].tolist()
+        X_selected = pd.DataFrame(X_selected, columns=selected_features, index=X.index)
+        info["selected_features"] = selected_features
+        return X_selected, selected_features, info
+        
+    elif method == "rfe":
+        if y is None:
+            return X, X.columns.tolist(), info
+        k = min(max_features, X_numeric.shape[1])
+        estimator = RandomForestClassifier(n_estimators=50, random_state=42)
+        selector = RFE(estimator, n_features_to_select=k)
+        X_selected = selector.fit_transform(X_numeric, y)
+        selected_features = X_numeric.columns[selector.get_support()].tolist()
+        X_selected = pd.DataFrame(X_selected, columns=selected_features, index=X.index)
+        info["selected_features"] = selected_features
+        return X_selected, selected_features, info
+    
+    # Default: return original
+    return X, X.columns.tolist(), info
+
+
+def _handle_imbalance(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    method: str,
+    sampling_strategy: str,
+) -> Tuple[pd.DataFrame, pd.Series, Dict[str, Any]]:
+    """Handle imbalance dataset menggunakan imblearn."""
+    info: Dict[str, Any] = {"method": method, "sampling_strategy": sampling_strategy}
+    
+    if method == "none" or not method:
+        return X_train, y_train, info
+    
+    try:
+        from imblearn.over_sampling import SMOTE, RandomOverSampler, ADASYN
+        from imblearn.under_sampling import RandomUnderSampler
+    except ImportError:
+        # Jika imblearn tidak tersedia, return original
+        info["error"] = "imblearn not installed"
+        return X_train, y_train, info
+    
+    # Convert X_train to numeric for imblearn
+    X_train_numeric = X_train.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    
+    if method == "oversample":
+        sampler = RandomOverSampler(sampling_strategy=sampling_strategy, random_state=42)
+    elif method == "undersample":
+        sampler = RandomUnderSampler(sampling_strategy=sampling_strategy, random_state=42)
+    elif method == "smote":
+        sampler = SMOTE(sampling_strategy=sampling_strategy, random_state=42)
+    elif method == "adasyn":
+        sampler = ADASYN(sampling_strategy=sampling_strategy, random_state=42)
+    else:
+        info["error"] = f"Unknown method: {method}"
+        return X_train, y_train, info
+    
+    try:
+        X_resampled, y_resampled = sampler.fit_resample(X_train_numeric, y_train)
+        X_resampled = pd.DataFrame(X_resampled, columns=X_train.columns, index=X_resampled.index)
+        info["original_shape"] = X_train.shape
+        info["resampled_shape"] = X_resampled.shape
+        info["class_distribution_before"] = y_train.value_counts().to_dict()
+        info["class_distribution_after"] = y_resampled.value_counts().to_dict()
+        return X_resampled, y_resampled, info
+    except Exception as e:
+        info["error"] = str(e)
+        return X_train, y_train, info
+
+
 def run(config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Jalankan preprocessing sesuai config.
@@ -235,9 +360,26 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
     X, enc_info = _encode(X, cat_cols, config.get("apply_encoding", True))
     if enc_info.get("encoded_columns"):
         steps.append(f"encoding={len(enc_info['encoded_columns'])} new cols")
-    _try_broadcast(dataset_id, 80, "Encoding selesai. Train-test split...")
+    _try_broadcast(dataset_id, 70, "Encoding selesai. Feature selection...")
 
-    # 5) Train-test split
+    # 5) Feature selection
+    fs_config = config.get("feature_selection")
+    if fs_config:
+        fs_method = fs_config.get("method", "none")
+        fs_max_features = fs_config.get("max_features", 10)
+        fs_threshold = fs_config.get("threshold", 0.05)
+        X, selected_features, fs_info = _feature_selection(
+            X, y, fs_method, fs_max_features, fs_threshold
+        )
+        if fs_info.get("selected_features"):
+            steps.append(f"feature_selection={fs_method} ({len(selected_features)} features)")
+            _try_broadcast(dataset_id, 75, "Feature selection selesai. Train-test split...")
+        else:
+            _try_broadcast(dataset_id, 75, "Feature selection skipped. Train-test split...")
+    else:
+        _try_broadcast(dataset_id, 75, "Feature selection skipped. Train-test split...")
+
+    # 6) Train-test split
     test_size = float(config.get("test_size", 0.2))
     random_state = int(config.get("random_state", 42))
     if y is not None and problem_type in ("Classification", "Regression"):
@@ -259,9 +401,25 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
         y_test = y.iloc[idx:] if y is not None else None
 
     steps.append(f"split={1 - test_size:.2f}/{test_size:.2f}")
-    _try_broadcast(dataset_id, 95, "Split selesai. Menyimpan state...")
+    _try_broadcast(dataset_id, 85, "Split selesai. Handling imbalance...")
 
-    # 6) Simpan ke state registry
+    # 7) Handle imbalance (hanya untuk training data)
+    imb_config = config.get("imbalance_handling")
+    if imb_config and y_train is not None:
+        imb_method = imb_config.get("method", "none")
+        imb_strategy = imb_config.get("sampling_strategy", "auto")
+        X_train, y_train, imb_info = _handle_imbalance(
+            X_train, y_train, imb_method, imb_strategy
+        )
+        if imb_info.get("error"):
+            steps.append(f"imbalance_handling={imb_method} (failed: {imb_info['error']})")
+        else:
+            steps.append(f"imbalance_handling={imb_method}")
+            _try_broadcast(dataset_id, 90, "Imbalance handling selesai. Menyimpan state...")
+    else:
+        _try_broadcast(dataset_id, 90, "Imbalance handling skipped. Menyimpan state...")
+
+    # 8) Simpan ke state registry
     state_id = uuid.uuid4().hex
     state = get_state(state_id)
     state["data"] = df
@@ -273,9 +431,13 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
     state["y_test"] = y_test
     state["numerical_columns"] = [c for c in num_cols if c in X.columns]
     state["categorical_columns"] = [c for c in cat_cols if c in X.columns]
-    state["feature_names"] = X.columns.tolist()
+    state["feature_names"] = X_train.columns.tolist()
     state["scaler_info"] = scale_info
     state["encoding_info"] = enc_info
+    if fs_config:
+        state["feature_selection_info"] = fs_info
+    if imb_config:
+        state["imbalance_handling_info"] = imb_info
 
     _try_broadcast(dataset_id, 100, "Preprocessing selesai!")
     return {
@@ -288,4 +450,6 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
         "target_column": target_column,
         "problem_type": problem_type,
         "preprocessing_steps": steps,
+        "feature_selection_info": fs_info if fs_config else None,
+        "imbalance_handling_info": imb_info if imb_config else None,
     }

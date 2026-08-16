@@ -171,6 +171,17 @@ export const api = {
   getModel: (id) => apiFetch(`/training/models/${id}`),
   deleteModel: (id) =>
     apiFetch(`/training/models/${id}`, { method: "DELETE" }),
+  evaluateModel: (config) =>
+    apiFetch("/training/evaluate", { method: "POST", body: JSON.stringify(config) }),
+  predictWithModel: (id, data) =>
+    apiFetch(`/training/models/${id}/predict`, { 
+      method: "POST", 
+      body: JSON.stringify({ data }) 
+    }),
+  downloadModel: (id) => {
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
+    window.open(`${API_BASE}/training/models/${id}/download`, '_blank');
+  },
   // Interpretation
   runShap: (payload) =>
     apiFetch("/interpretation/shap", {

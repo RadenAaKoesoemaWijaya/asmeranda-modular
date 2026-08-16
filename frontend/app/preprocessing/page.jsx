@@ -20,6 +20,18 @@ export default function PreprocessingPage() {
   const [imputationStrategy, setImputationStrategy] = useState("mean");
   const [applyEncoding, setApplyEncoding] = useState(true);
   const [testSize, setTestSize] = useState(0.2);
+  
+  // Feature selection states
+  const [featureSelectionMethod, setFeatureSelectionMethod] = useState("none");
+  const [maxFeatures, setMaxFeatures] = useState(10);
+  const [selectionThreshold, setSelectionThreshold] = useState(0.05);
+  const [showFeatureSelection, setShowFeatureSelection] = useState(false);
+  
+  // Imbalance handling states
+  const [imbalanceMethod, setImbalanceMethod] = useState("none");
+  const [samplingStrategy, setSamplingStrategy] = useState("auto");
+  const [showImbalanceHandling, setShowImbalanceHandling] = useState(false);
+  
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -57,6 +69,15 @@ export default function PreprocessingPage() {
         apply_encoding: applyEncoding,
         test_size: Number(testSize),
         random_state: 42,
+        feature_selection: showFeatureSelection ? {
+          method: featureSelectionMethod,
+          max_features: Number(maxFeatures),
+          threshold: Number(selectionThreshold),
+        } : null,
+        imbalance_handling: showImbalanceHandling ? {
+          method: imbalanceMethod,
+          sampling_strategy: samplingStrategy,
+        } : null,
       });
       if (!r.success) throw new Error(r.error);
       setResult(r);
@@ -187,6 +208,139 @@ export default function PreprocessingPage() {
         </label>
       </div>
 
+      <div style={{ marginTop: 16 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={showFeatureSelection}
+            onChange={(e) => setShowFeatureSelection(e.target.checked)}
+          />
+          <strong>Advanced: Feature Selection</strong>
+        </label>
+      </div>
+
+      {showFeatureSelection && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 16,
+            background: "#f8fafc",
+            borderRadius: 8,
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <h4 style={{ marginTop: 0, marginBottom: 12 }}>Feature Selection</h4>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 12,
+            }}
+          >
+            <label>
+              Method
+              <select
+                value={featureSelectionMethod}
+                onChange={(e) => setFeatureSelectionMethod(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                <option value="none">None</option>
+                <option value="variance">Variance Threshold</option>
+                <option value="correlation">Correlation Filter</option>
+                <option value="kbest">SelectKBest</option>
+                <option value="rfe">RFE (Recursive Elimination)</option>
+              </select>
+            </label>
+
+            <label>
+              Max Features
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={maxFeatures}
+                onChange={(e) => setMaxFeatures(e.target.value)}
+                style={{ width: "100%" }}
+              />
+            </label>
+
+            <label>
+              Threshold
+              <input
+                type="number"
+                min="0.01"
+                max="1.0"
+                step="0.01"
+                value={selectionThreshold}
+                onChange={(e) => setSelectionThreshold(e.target.value)}
+                style={{ width: "100%" }}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 16 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={showImbalanceHandling}
+            onChange={(e) => setShowImbalanceHandling(e.target.checked)}
+          />
+          <strong>Advanced: Handle Imbalance Dataset</strong>
+        </label>
+      </div>
+
+      {showImbalanceHandling && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 16,
+            background: "#f8fafc",
+            borderRadius: 8,
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <h4 style={{ marginTop: 0, marginBottom: 12 }}>Imbalance Handling</h4>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12,
+            }}
+          >
+            <label>
+              Method
+              <select
+                value={imbalanceMethod}
+                onChange={(e) => setImbalanceMethod(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                <option value="none">None</option>
+                <option value="oversample">Random Oversampling</option>
+                <option value="undersample">Random Undersampling</option>
+                <option value="smote">SMOTE</option>
+                <option value="adasyn">ADASYN</option>
+              </select>
+            </label>
+
+            <label>
+              Sampling Strategy
+              <select
+                value={samplingStrategy}
+                onChange={(e) => setSamplingStrategy(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                <option value="auto">Auto</option>
+                <option value="minority">Minority</option>
+                <option value="not_minority">Not Minority</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={run}
         disabled={busy}
@@ -230,6 +384,25 @@ export default function PreprocessingPage() {
           <h3>✓ {tr("common.success")}</h3>
           <p>Train: {result.n_samples_train} | Test: {result.n_samples_test} | Features: {result.n_features}</p>
           <p>Steps: {result.preprocessing_steps.join(" → ")}</p>
+          
+          {result.feature_selection_info && result.feature_selection_info.method !== "none" && (
+            <div style={{ marginTop: 8, padding: 8, background: "#f0fdf4", borderRadius: 4 }}>
+              <strong>Feature Selection:</strong> {result.feature_selection_info.method}
+              {result.feature_selection_info.selected_features && (
+                <span> ({result.feature_selection_info.selected_features.length} features selected)</span>
+              )}
+            </div>
+          )}
+          
+          {result.imbalance_handling_info && result.imbalance_handling_info.method !== "none" && (
+            <div style={{ marginTop: 8, padding: 8, background: "#f0fdf4", borderRadius: 4 }}>
+              <strong>Imbalance Handling:</strong> {result.imbalance_handling_info.method}
+              {result.imbalance_handling_info.original_shape && (
+                <span> (Samples: {result.imbalance_handling_info.original_shape[0]} → {result.imbalance_handling_info.resampled_shape[0]})</span>
+              )}
+            </div>
+          )}
+          
           <p>
             Lanjut ke <strong>{tr("nav.training")}</strong>.
           </p>

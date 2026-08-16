@@ -60,6 +60,17 @@ class EdaCorrelationResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Preprocessing
 # ---------------------------------------------------------------------------
+class FeatureSelectionConfig(BaseModel):
+    method: str = "none"  # none|variance|correlation|kbest|rfe
+    max_features: int = 10
+    threshold: float = 0.05
+
+
+class ImbalanceConfig(BaseModel):
+    method: str = "none"  # none|oversample|undersample|smote|adasyn
+    sampling_strategy: str = "auto"
+
+
 class PreprocessingConfig(BaseModel):
     dataset_id: str
     target_column: Optional[str] = None
@@ -71,6 +82,8 @@ class PreprocessingConfig(BaseModel):
     apply_polynomial: bool = False
     apply_binning: bool = False
     apply_encoding: bool = True
+    feature_selection: Optional[FeatureSelectionConfig] = None
+    imbalance_handling: Optional[ImbalanceConfig] = None
     test_size: float = 0.2
     random_state: int = 42
 
@@ -85,6 +98,8 @@ class PreprocessingResponse(BaseModel):
     target_column: Optional[str] = None
     problem_type: Optional[str] = None
     preprocessing_steps: Optional[List[str]] = None
+    feature_selection_info: Optional[Dict[str, Any]] = None
+    imbalance_handling_info: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 
@@ -101,6 +116,13 @@ class TrainingConfig(BaseModel):
     random_state: int = 42
 
 
+class EvaluationConfig(BaseModel):
+    state_id: str
+    model_id: str
+    generate_plots: bool = True
+    plot_types: List[str] = ["confusion_matrix", "roc_curve", "feature_importance"]
+
+
 class TrainingResponse(BaseModel):
     success: bool
     model_id: Optional[str] = None
@@ -108,3 +130,22 @@ class TrainingResponse(BaseModel):
     cv_scores: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     message: Optional[str] = None  # For background task status messages
+
+
+class EvaluationResponse(BaseModel):
+    success: bool
+    model_id: Optional[str] = None
+    metrics: Optional[Dict[str, Any]] = None
+    plots: Optional[Dict[str, str]] = None  # plot_type -> base64_encoded_image
+    error: Optional[str] = None
+
+
+class PredictionRequest(BaseModel):
+    data: List[Dict[str, Any]]  # Input data for prediction
+
+
+class PredictionResponse(BaseModel):
+    success: bool
+    predictions: Optional[List[Any]] = None
+    probabilities: Optional[List[List[float]]] = None
+    error: Optional[str] = None
