@@ -17,15 +17,18 @@ from slowapi.util import get_remote_address
 
 from backend.schemas.models import (
     TrainingConfig, TrainingResponse, EvaluationConfig, 
-    EvaluationResponse, PredictionRequest, PredictionResponse
+    EvaluationResponse, PredictionRequest, PredictionResponse,
+    OptimizationConfig, OptimizationResponse
 )
 from backend.services import training_service, evaluation_service
+from backend.services.optimization_service import OptimizationService
 from backend.core.config import settings
 from core.state import get_state
 
 logger = logging.getLogger("asmeranda.api.training")
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+optimization_service = OptimizationService()
 
 
 def _train_model_background(
@@ -195,6 +198,181 @@ def download_model(model_id: str):
         filename=f"model_{model_id}.pkl",
         media_type="application/octet-stream"
     )
+
+
+# TEMPORARY: Optimization endpoints added here for immediate functionality
+@router.post("/optimize", response_model=OptimizationResponse)
+def optimize_hyperparameters(
+    config: OptimizationConfig, background_tasks: BackgroundTasks
+) -> OptimizationResponse:
+    """Perform hyperparameter optimization (async background task)."""
+    try:
+        state = get_state(config.state_id)
+        X_train = state.get("X_train")
+        y_train = state.get("y_train")
+
+        if X_train is None or y_train is None:
+            return OptimizationResponse(
+                success=False,
+                error="No training data available. Please run preprocessing first."
+            )
+
+        if not isinstance(X_train, pd.DataFrame):
+            X_train = pd.DataFrame(X_train)
+
+        optimization_params = {
+            "cv": config.cv_folds,
+        }
+        if config.method == "random_search":
+            optimization_params["n_iter"] = config.n_iter
+        elif config.method == "bayesian":
+            optimization_params["n_trials"] = config.n_iter
+
+        background_tasks.add_task(
+            _optimization_background,
+            config.state_id,
+            X_train,
+            y_train,
+            config.model_type,
+            config.problem_type,
+            config.method,
+            **optimization_params
+        )
+
+        return OptimizationResponse(
+            success=True,
+            method=config.method,
+            message="Optimization started in background. Results will be available upon completion."
+        )
+
+    except Exception as exc:
+        logger.error("Optimization start failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Optimization start failed: {str(exc)}")
+
+
+@router.post("/optimize-sync", response_model=OptimizationResponse)
+def optimize_hyperparameters_sync(config: OptimizationConfig) -> OptimizationResponse:
+    """Perform hyperparameter optimization (synchronous, for smaller datasets)."""
+    try:
+        state = get_state(config.state_id)
+        X_train = state.get("X_train")
+        y_train = state.get("y_train")
+
+        if X_train is None or y_train is None:
+            return OptimizationResponse(
+                success=False,
+                error="No training data available. Please run preprocessing first."
+            )
+
+        if not isinstance(X_train, pd.DataFrame):
+            X_train = pd.DataFrame(X_train)
+
+        optimization_params = {
+            "cv": config.cv_folds,
+        }
+        if config.method == "random_search":
+            optimization_params["n_iter"] = config.n_iter
+        elif config.method == "bayesian":
+            optimization_params["n_trials"] = config.n_iter
+
+        result = _optimization_background(
+            config.state_id,
+            X_train,
+            y_train,
+            config.model_type,
+            config.problem_type,
+            config.method,
+            **optimization_params
+        )
+
+        if not result.get("success"):
+            return OptimizationResponse(
+                success=False,
+                error=result.get("error"),
+                method=config.method
+            )
+
+        state["optimization_results"] = {
+            "best_params": result.get("best_params"),
+            "best_score": result.get("best_score"),
+            "method": result.get("method"),
+            "model_type": config.model_type,
+        }
+
+        return OptimizationResponse(
+            success=True,
+            best_params=result.get("best_params"),
+            best_score=result.get("best_score"),
+            method=result.get("method"),
+            cv_results=result.get("cv_results")
+        )
+
+    except Exception as exc:
+        logger.error("Synchronous optimization failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Optimization failed: {str(exc)}")
+
+
+def _optimization_background(
+    state_id: str,
+    X_train,
+    y_train,
+    model_type: str,
+    problem_type: str,
+    method: str,
+    **optimization_params
+) -> Dict[str, Any]:
+    """Background task for hyperparameter optimization."""
+    try:
+        if method == "grid_search":
+            result = optimization_service.grid_search(
+                X_train, y_train, model_type, problem_type, **optimization_params
+            )
+        elif method == "random_search":
+            result = optimization_service.random_search(
+                X_train, y_train, model_type, problem_type, **optimization_params
+            )
+        elif method == "bayesian":
+            result = optimization_service.bayesian_optimization(
+                X_train, y_train, model_type, problem_type, **optimization_params
+            )
+        else:
+            result = {"success": False, "error": f"Unknown optimization method: {method}"}
+
+        if result.get("success"):
+            logger.info(
+                "Optimization completed successfully",
+                extra={
+                    "state_id": state_id,
+                    "model_type": model_type,
+                    "method": method,
+                    "best_score": result.get("best_score")
+                }
+            )
+        else:
+            logger.error(
+                "Optimization failed",
+                extra={
+                    "state_id": state_id,
+                    "model_type": model_type,
+                    "method": method,
+                    "error": result.get("error")
+                }
+            )
+
+        return result
+
+    except Exception as exc:
+        logger.error(
+            "Background optimization error",
+            exc_info=True,
+            extra={
+                "state_id": state_id,
+                "model_type": model_type,
+                "method": method,
+                "error_type": type(exc).__name__
+            }
+        )
+        return {"success": False, "error": str(exc)}
 
 
 @router.post("/models/{model_id}/predict", response_model=PredictionResponse)

@@ -11,11 +11,13 @@ import pandas as pd
 import polars as pl
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.schemas.models import EdaCorrelationResponse, EdaSummaryResponse
+from backend.schemas.models import EdaCorrelationResponse, EdaSummaryResponse, RecommendationRequest, RecommendationResponse
 from backend.services import dataset_service
+from backend.services.recommendation_service import RecommendationService
 
 logger = logging.getLogger("asmeranda.api.eda")
 router = APIRouter()
+recommendation_service = RecommendationService()
 
 
 @router.get("/{dataset_id}/summary", response_model=EdaSummaryResponse)
@@ -88,3 +90,57 @@ def paginated_data(
     except Exception as exc:
         logger.exception("Paginated data gagal")
         return {"success": False, "error": str(exc)}
+
+
+# TEMPORARY: Recommendations endpoint added here for immediate functionality
+@router.post("/analyze", response_model=RecommendationResponse)
+def analyze_dataset(config: RecommendationRequest) -> RecommendationResponse:
+    """Analyze dataset and provide AI-powered recommendations."""
+    try:
+        data = dataset_service.get_dataset(config.dataset_id)
+        if data is None:
+            logger.warning(
+                "Dataset not found for recommendation analysis",
+                extra={"dataset_id": config.dataset_id}
+            )
+            return RecommendationResponse(
+                success=False,
+                error=f"Dataset {config.dataset_id} not found"
+            )
+
+        result = recommendation_service.analyze_dataset(data)
+
+        if not result.get("success"):
+            return RecommendationResponse(
+                success=False,
+                error=result.get("error")
+            )
+
+        preprocessing_steps = recommendation_service.recommend_preprocessing(data)
+
+        logger.info(
+            "Dataset analysis completed successfully",
+            extra={
+                "dataset_id": config.dataset_id,
+                "n_recommendations": len(result.get("recommendations", [])),
+                "detected_problem_type": result.get("detected_problem_type")
+            }
+        )
+
+        return RecommendationResponse(
+            success=True,
+            recommendations=result.get("recommendations"),
+            dataset_info=result.get("dataset_info"),
+            preprocessing_steps=preprocessing_steps
+        )
+
+    except Exception as exc:
+        logger.error(
+            "Dataset analysis failed",
+            exc_info=True,
+            extra={
+                "dataset_id": config.dataset_id,
+                "error_type": type(exc).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(exc)}")

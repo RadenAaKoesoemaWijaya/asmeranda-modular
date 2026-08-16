@@ -7,7 +7,7 @@
  * - Untuk endpoint biasa, gunakan `apiFetch`
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "http://localhost:8001/api/v1";
 
 export class ApiError extends Error {
   constructor(message, status, payload) {
@@ -179,20 +179,20 @@ export const api = {
       body: JSON.stringify({ data }) 
     }),
   downloadModel: (id) => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "http://localhost:8001/api/v1";
     window.open(`${API_BASE}/training/models/${id}/download`, '_blank');
   },
-  // Clustering (temporarily using preprocessing endpoints)
+  // Clustering (using preprocessing endpoints)
   performClustering: (config) =>
     apiFetch("/preprocessing/cluster", { method: "POST", body: JSON.stringify(config) }),
   findOptimalK: (config) =>
     apiFetch("/preprocessing/optimal-k", { method: "POST", body: JSON.stringify(config) }),
-  // Optimization (temporarily using training endpoints)
+  // Optimization (using training endpoints)
   optimizeHyperparameters: (config) =>
     apiFetch("/training/optimize", { method: "POST", body: JSON.stringify(config) }),
   optimizeHyperparametersSync: (config) =>
     apiFetch("/training/optimize-sync", { method: "POST", body: JSON.stringify(config) }),
-  // Recommendations (temporarily using eda endpoints)
+  // Recommendations (using eda endpoints)
   analyzeDataset: (config) =>
     apiFetch("/eda/analyze", { method: "POST", body: JSON.stringify(config) }),
   // Interpretation
