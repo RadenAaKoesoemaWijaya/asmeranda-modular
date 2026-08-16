@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /project
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -15,11 +15,11 @@ COPY requirements-backend.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements-backend.txt
 
-# Copy application code
+# Copy entire project structure
 COPY . .
 
 # Create data directory
-RUN mkdir -p /app/data
+RUN mkdir -p /project/data
 
 # Expose port
 EXPOSE 8000
@@ -29,4 +29,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

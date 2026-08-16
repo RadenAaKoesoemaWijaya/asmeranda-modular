@@ -1,6 +1,10 @@
 """Asmeranda backend entrypoint (FastAPI app)."""
 from __future__ import annotations
 
+# Setup imports for both Docker and local development
+import import_helper
+import_helper.setup_imports()
+
 import logging
 import sys
 from pathlib import Path
@@ -16,7 +20,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from backend.api.v1 import (
+from api.v1 import (
     datasets,
     eda,
     health,
@@ -26,7 +30,8 @@ from backend.api.v1 import (
     training,
     ws,
 )
-from backend.core.config import settings
+
+from core.config import settings
 
 
 def create_app() -> FastAPI:
