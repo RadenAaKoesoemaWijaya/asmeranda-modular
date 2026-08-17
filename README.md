@@ -1,49 +1,79 @@
 # Asmeranda AI
 
-A modern, enterprise-ready modular machine learning platform for end-to-end data science workflows. Upload datasets, explore data, preprocess, train models, optimize hyperparameters, interpret results, and run advanced ML operations including time series forecasting, anomaly detection, clustering, and explainable AI (XAI)—backed by comprehensive role-based security hardening.
+An enterprise-grade modular machine learning platform delivering end-to-end data science workflows: high-throughput dataset ingestion, exploratory data analysis (EDA), automated feature engineering, supervised/unsupervised model training, Optuna hyperparameter optimization, explainable AI (SHAP & LIME), time series forecasting, and role-based security hardening.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🔐 Security & Access Control (RBAC)
-- **Role-Based Access Control (RBAC)**: Support for `Admin`, `Data Scientist`, and `Viewer` roles.
-- **JWT & API Key Authentication**: Secure token-based user sessions and API key verification.
-- **Password Strength Validation**: Enforced password complexity rules (length, uppercase, lowercase, numbers, symbols).
+- **Role-Based Access Control (RBAC)**: Enforces access tiers (`Admin`, `Analyst`, `Viewer`).
+- **JWT & API Key Authentication**: Cryptographically signed access tokens and high-entropy service API keys.
+- **Password Strength Policy**: Minimum length, uppercase, lowercase, numeric, and special character enforcement.
 - **Security Middlewares**:
-  - `SecurityHeadersMiddleware`: HTTP security headers (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Content-Security-Policy`, `Strict-Transport-Security`).
-  - `RequestSizeLimitMiddleware`: Payload size enforcement (HTTP 413 protection).
-- **Rate Limiting**: Endpoint-specific rate limiting powered by SlowAPI.
-- **Security Audit Trail**: Structured event logging (`security_audit.log`) for authentication, registration, permission checks, and payload violations.
-- **Input Sanitization & Output Encoding**: XSS and injection prevention.
+  - `SecurityHeadersMiddleware`: Injects `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `CSP`, and `HSTS`.
+  - `RequestSizeLimitMiddleware`: Payload size restrictions against HTTP 413 Denial-of-Service.
+- **Rate Limiting**: Endpoint-level rate limiting powered by SlowAPI.
+- **Audit Logging**: Structured JSON security trail (`security_audit.log`) tracking authentication, training invocations, and policy violations.
 
-### 🧠 Core Machine Learning
-- **Supervised Learning**: 9+ algorithms (RandomForest, XGBoost, LightGBM, CatBoost, GradientBoosting, SVM, DecisionTree, KNN, Logistic/Linear Regression).
-- **Model Training & Cross-Validation**: K-Fold, Stratified K-Fold, Leave-One-Out, and Time Series splits.
-- **Hyperparameter Optimization**: Grid Search, Random Search, and Bayesian Optimization with Optuna.
-- **Intelligent Recommendations**: Automatic algorithm recommendations and parameter presets based on dataset characteristics.
-- **Advanced Metrics & Evaluation**: ROC-AUC, PR Curves, Confusion Matrix, MCC, MAPE, Balanced Accuracy, Cohen's Kappa, and Learning Curves.
-- **Model Comparison & Leaderboard**: Automatic comparison and ranking of trained models.
+### 🧠 Core Machine Learning & Auto-Optimization
+- **Supervised Learning**: 9+ built-in algorithms (RandomForest, XGBoost, LightGBM, CatBoost, GradientBoosting, SVM, DecisionTree, KNN, Logistic/Linear Regression).
+- **Validation Schemes**: K-Fold, Stratified K-Fold, Leave-One-Out, and Time-Series Splits.
+- **Automated Hyperparameter Optimization**: Grid Search, Random Search, and Bayesian Optimization via Optuna.
+- **Smart Recommendations**: Rule-based algorithm selection and preprocessing presets tailored to data shape.
+- **Comprehensive Evaluation**: ROC-AUC, PR Curves, Confusion Matrices, MCC, MAPE, Balanced Accuracy, and Learning Curves.
 
 ### 🔍 Unsupervised Learning & Dimensionality Reduction
 - **Clustering**: KMeans, DBSCAN, Hierarchical, Spectral, and HDBSCAN.
-- **Cluster Diagnostics**: Optimal-K analysis via Elbow method and Silhouette score evaluation.
-- **Dimensionality Reduction**: UMAP and PCA for 2D/3D high-dimensional data visualization.
+- **Cluster Diagnostics**: Automated Elbow method and Silhouette score evaluation for Optimal-K detection.
+- **Dimensionality Reduction**: 2D/3D projection using UMAP and PCA.
 
 ### 💡 Explainable AI (XAI)
-- **SHAP (SHapley Additive exPlanations)**: Global feature importance with TreeExplainer, LinearExplainer, and KernelExplainer.
-- **LIME (Local Interpretable Model-agnostic Explanations)**: Local prediction explanations for tabular data.
-- **Interactive Visualizations**: Interactive feature attribution and prediction contribution plots.
+- **SHAP (SHapley Additive exPlanations)**: TreeExplainer, LinearExplainer, and KernelExplainer with feature importance summary.
+- **LIME (Local Interpretable Model-agnostic Explanations)**: Local tabular prediction explanations.
 
 ### 📈 Time Series & Anomaly Detection
 - **Time Series Forecasting**: ARIMA, SARIMA, Prophet, LSTM, and moving averages with automated frequency inference.
-- **Anomaly Detection**: Isolation Forest, One-Class SVM, and rolling statistical bounds.
-- **Stationarity & Preprocessing**: ADF tests, seasonal decomposition, and missing value interpolation.
+- **Anomaly Detection**: Tabular and temporal anomaly detection using Isolation Forest and One-Class SVM.
 
-### 🧹 Data Processing & Exploratory Data Analysis (EDA)
-- **Automated Type Inference**: Automatic column type detection (numerical, categorical, datetime, text).
-- **Preprocessing Pipeline**: Missing value imputation, outlier detection, categorical encoding, and feature scaling (StandardScaler, MinMaxScaler, RobustScaler).
-- **EDA Suite**: Data summary statistics, distribution histograms, and correlation heatmaps.
+### ⚡ High-Throughput Data Ingestion & Preprocessing
+- **Polars Engine**: Lightning-fast columnar parsing, SIMD vectorization, and LazyFrame parquet scanning.
+- **Feature Engineering Pipeline**: Smart type inference, missing value imputation, robust outlier filtering, categorical encoding, and multi-mode scalers.
+
+---
+
+## 🏗️ System Architecture & Workflow
+
+```mermaid
+graph TD
+    Client[Next.js 14 Web Frontend] -->|REST / WebSocket| Nginx[Nginx Reverse Proxy]
+    Nginx -->|HTTP 8000| FastAPI[FastAPI Backend Server]
+    
+    subgraph Security Layer
+        FastAPI --> MW1[SecurityHeaders Middleware]
+        FastAPI --> MW2[RequestSizeLimit Middleware]
+        FastAPI --> MW3[SlowAPI Rate Limiter]
+        FastAPI --> MW4[RBAC & JWT Auth Guard]
+    end
+    
+    subgraph Data Processing & State
+        FastAPI --> StateReg[Thread-Safe State Manager RLock + JSON Sidecar]
+        FastAPI --> PolarsEngine[Polars Lazy Engine / Parquet Store]
+    end
+    
+    subgraph Async ML & Heavy Computation
+        FastAPI -->|BackgroundTasks| MLTrain[Model Training Engine]
+        FastAPI -->|BackgroundTasks| OptunaOpt[Optuna Hyperparameter Tuning]
+        FastAPI --> ThreadPool[Starlette ThreadPool SHAP / UMAP / EDA]
+    end
+```
+
+### 🏎️ Performance Optimizations & Bottleneck Prevention
+1. **Lazy Columnar Ingestion**: Large dataset previews use `polars.scan_parquet().slice().collect()` to prevent in-memory duplication and high memory peaks.
+2. **Non-Blocking Background Tasks**: Intensive compute tasks (Model Training, Bayesian Tuning) run asynchronously via FastAPI `BackgroundTasks`, keeping API request latency low.
+3. **Parquet Columnar Persistence**: Ingested datasets are saved as Parquet with JSON metadata sidecars, delivering 5-10x compression and fast random access.
+4. **State Isolation**: Concurrent user sessions are isolated via unique `state_id` tokens with thread-safe `RLock` synchronization.
+5. **Sample Capping for XAI**: Computationally heavy operations (SHAP, LIME, UMAP) apply controlled sampling (`max_samples`) to prevent thread pool starvation.
 
 ---
 
@@ -51,32 +81,30 @@ A modern, enterprise-ready modular machine learning platform for end-to-end data
 
 | Layer | Technologies |
 |---|---|
-| **Backend Framework** | FastAPI, Pydantic v2, Uvicorn, Starlette |
-| **Security & Auth** | PyJWT, Passlib (Bcrypt / PBKDF2), SlowAPI, SQLite |
+| **Backend API** | FastAPI, Pydantic v2, Uvicorn, Starlette, SlowAPI |
+| **Data Engine** | Polars, Pandas, PyArrow, NumPy |
 | **Machine Learning** | scikit-learn, XGBoost, LightGBM, CatBoost, Optuna, statsmodels |
 | **Explainable AI** | SHAP, LIME |
-| **Data Processing** | Polars, Pandas, NumPy, PyArrow |
-| **Frontend Framework** | Next.js 14 (App Router), React 18, Zustand |
-| **Styling & UI** | Custom Responsive CSS Design System, Dynamic Components |
-| **Container & Cloud** | Docker, Docker Compose, Nginx, Azure Container Apps, AWS, GCP |
+| **Security & Auth** | PyJWT, Direct Bcrypt, Python Secrets, SQLite Store |
+| **Frontend UI** | Next.js 14 (App Router), React 18, Zustand, Custom CSS Design System |
+| **Infra & DevOps** | Docker, Docker Compose, Nginx, Azure Container Apps, AWS, GCP |
 
 ---
 
-## 📦 Installation & Setup
+## 📦 Installation & Quickstart
 
 ### Prerequisites
 - **Python 3.11+**
 - **Node.js 18+** & `npm`
-- **Docker Desktop** (optional, for containerized deployment)
+- **Docker Desktop** (optional for containerized setup)
 
 ---
 
 ### Local Development Setup
 
-#### 1. Backend Setup
-
+#### 1. Backend Service
 ```bash
-# Clone and enter directory
+# Navigate to workspace root
 cd asmeranda-modular
 
 # Create and activate virtual environment
@@ -89,22 +117,19 @@ python -m venv .venv
 # Install backend dependencies
 pip install -r backend/requirements-backend.txt
 
-# Configure environment variables (optional, defaults available)
+# Setup environment configuration
 cp .env.example .env
 
-# Run FastAPI backend
+# Run FastAPI backend with Uvicorn
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-# Or run using helper script:
-# python backend/run_backend.py
 ```
 
-#### 2. Frontend Setup
-
+#### 2. Frontend Application
 ```bash
-# Open new terminal and navigate to frontend
+# In a separate terminal, navigate to frontend
 cd frontend
 
-# Install npm packages
+# Install Node dependencies
 npm install
 
 # Start Next.js development server
@@ -115,33 +140,32 @@ npm run dev
 
 ### Access Points & Default Credentials
 
-- **Frontend Application**: [http://localhost:3000](http://localhost:3000)
+- **Frontend App**: [http://localhost:3000](http://localhost:3000)
 - **Backend API**: [http://localhost:8000](http://localhost:8000)
-- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs) (enabled in development/debug mode)
-- **ReDoc API Documentation**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- **Swagger Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc API Reference**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
-#### Default Admin Credentials (Auto-bootstrapped in local DB):
-- **Username**: `admin`
-- **Password**: `AdminPass123!`
-- **Role**: `admin`
+| Account | Username | Password | Role |
+|---|---|---|---|
+| **System Admin** | `admin` | `Admin@Asmeranda2026!` | `admin` |
 
 ---
 
 ## 🐳 Docker Deployment
 
-To build and run the complete multi-service stack with Docker Compose:
+To build and run the multi-container stack with Docker Compose:
 
 ```bash
-# Start all containers (Backend, Frontend, Nginx)
+# Build and start services (Backend, Frontend, Nginx proxy)
 docker compose up --build -d
 
-# Check status
+# Inspect running containers
 docker compose ps
 
-# View logs
+# View service logs
 docker compose logs -f
 
-# Stop containers
+# Teardown stack
 docker compose down
 ```
 
@@ -149,161 +173,60 @@ docker compose down
 
 ## 📊 API Reference
 
-| Prefix | Endpoint | Method | Description |
-|---|---|---|---|
-| **/api/v1/auth** | `/login` | `POST` | User login (JSON) & JWT access token generation |
-| | `/token` | `POST` | OAuth2-compatible token login |
-| | `/register` | `POST` | Register new user with password validation |
-| | `/me` | `GET` | Get current authenticated user profile |
-| | `/users` | `GET` | List all users (Admin role required) |
-| | `/verify-key` | `POST` | Validate custom API key |
-| **/api/v1/datasets** | `/upload` | `POST` | Upload dataset (CSV, Excel, Parquet, JSON) |
-| | `/list` | `GET` | List all stored datasets |
-| | `/{dataset_id}` | `GET` | Get dataset details and column information |
-| | `/{dataset_id}/preview` | `GET` | Paginated dataset preview |
-| **/api/v1/eda** | `/summary` | `POST` | Compute statistical summary & missingness |
-| | `/correlations` | `POST` | Compute correlation matrix |
-| | `/distributions` | `POST` | Generate column histograms and distributions |
-| **/api/v1/preprocessing** | `/run` | `POST` | Run feature engineering & transformation |
-| | `/cluster` | `POST` | Execute clustering (KMeans, DBSCAN, etc.) |
-| | `/optimal-k` | `GET` | Calculate optimal cluster count |
-| **/api/v1/training** | `/start` | `POST` | Start supervised model training |
-| | `/models` | `GET` | List all trained models |
-| | `/models/{model_id}` | `GET` | Get trained model metrics & metadata |
-| | `/evaluate` | `POST` | Run comprehensive model evaluation |
-| | `/learning-curve` | `POST` | Generate learning curves |
-| | `/compare` | `POST` | Compare multiple trained models |
-| | `/optimize` | `POST` | Execute Optuna hyperparameter optimization |
-| **/api/v1/recommendations** | `/models` | `POST` | Get smart algorithm recommendations |
-| | `/pipeline` | `POST` | Recommend complete preprocessing pipeline |
-| **/api/v1/optimization** | `/hyperparameters` | `POST` | Run parameter search & tuning |
-| **/api/v1/interpretation** | `/shap` | `POST` | Generate SHAP feature attributions |
-| | `/lime` | `POST` | Generate LIME instance explanations |
-| **/api/v1/timeseries** | `/forecast` | `POST` | Train & predict time series forecasts |
-| | `/anomaly-detection` | `POST` | Detect time-series anomalies |
-| **/api/v1/advanced-ml** | `/umap` | `POST` | Dimensionality reduction via UMAP |
-| | `/hdbscan` | `POST` | HDBSCAN clustering |
-| | `/anomaly-detection` | `POST` | Tabular anomaly detection (Isolation Forest, SVM) |
-| | `/handle-missing-values`| `POST` | Missing data imputation utilities |
-| | `/detect-outliers` | `POST` | Outlier detection |
-| **/api/v1/ws** | `/ws` | `WS` | Real-time WebSocket event streaming |
-| **/health** | `/` | `GET` | Service health status check |
+| Endpoint Prefix | Method | Description |
+|---|---|---|
+| `/api/v1/auth/login` | `POST` | User authentication & JWT access token issuance |
+| `/api/v1/auth/register` | `POST` | User registration with password policy validation |
+| `/api/v1/auth/me` | `GET` | Retrieve profile and assigned roles |
+| `/api/v1/datasets/upload` | `POST` | Upload and ingest datasets (CSV, XLSX, Parquet, JSON) |
+| `/api/v1/datasets/list` | `GET` | List all ingested datasets |
+| `/api/v1/datasets/{id}/preview`| `GET` | Paginated dataset preview via Polars LazyFrame |
+| `/api/v1/eda/summary` | `POST` | Descriptive statistics, data types & missing value audit |
+| `/api/v1/preprocessing/run` | `POST` | Execute imputation, scaling, and train-test splitting |
+| `/api/v1/preprocessing/cluster`| `POST` | Run unsupervised clustering (KMeans, DBSCAN, etc.) |
+| `/api/v1/training/start` | `POST` | Asynchronous model training dispatch |
+| `/api/v1/training/models` | `GET` | Retrieve list and metrics of trained models |
+| `/api/v1/training/evaluate` | `POST` | Comprehensive performance metrics and confusion matrices |
+| `/api/v1/optimization/hyperparameters` | `POST` | Bayesian optimization with Optuna |
+| `/api/v1/interpretation/shap` | `POST` | Global feature attribution calculation |
+| `/api/v1/interpretation/lime` | `POST` | Local instance explanation |
+| `/api/v1/timeseries/forecast` | `POST` | Time-series modeling & future period forecasting |
+| `/api/v1/advanced-ml/umap` | `POST` | High-dimensional data projection via UMAP |
+| `/health` | `GET` | Service liveness probe |
 
 ---
 
-## 🏗️ Architecture & Project Structure
-
-```
-asmeranda-modular/
-├── backend/
-│   ├── api/v1/                  # FastAPI REST and WebSocket routes
-│   │   ├── auth.py              # Authentication, registration & user management
-│   │   ├── datasets.py          # Dataset ingestion & preview
-│   │   ├── eda.py               # Exploratory data analysis
-│   │   ├── preprocessing.py     # Preprocessing and clustering
-│   │   ├── training.py          # Supervised training & evaluation
-│   │   ├── optimization.py      # Optuna hyperparameter tuning
-│   │   ├── recommendations.py   # AI-assisted model & pipeline recommendations
-│   │   ├── interpretation.py    # SHAP and LIME explainability
-│   │   ├── timeseries.py        # Time series forecasting & anomaly detection
-│   │   ├── advanced_ml.py       # UMAP, HDBSCAN, Outliers
-│   │   ├── health.py            # Health probe endpoint
-│   │   └── ws.py                # WebSocket handler
-│   ├── core/                    # Core configuration and security
-│   │   ├── auth.py              # User authentication, RBAC, JWT, SQLite store
-│   │   ├── config.py            # Pydantic Settings & environment loader
-│   │   ├── security_audit.py    # Structured audit logging
-│   │   ├── security_utils.py    # Input sanitization, password validator
-│   │   └── session_manager.py   # Session handling
-│   ├── schemas/                 # Pydantic request/response schemas
-│   ├── services/                # Business logic & ML computational engines
-│   ├── tests/                   # Pytest test suite (unit, integration, security)
-│   ├── Dockerfile               # Backend container image definition
-│   ├── requirements-backend.txt # Python dependency specification
-│   └── main.py                  # FastAPI application entrypoint & middleware stack
-├── frontend/
-│   ├── app/                     # Next.js 14 App Router pages
-│   │   ├── login/               # User login & authentication page
-│   │   ├── data-upload/         # Dataset upload & management
-│   │   ├── eda/                 # Exploratory data analysis dashboard
-│   │   ├── preprocessing/       # Feature engineering & scaling
-│   │   ├── training/            # Model training & comparison
-│   │   ├── optimization/        # Hyperparameter tuning
-│   │   ├── recommendations/     # AI model recommendations
-│   │   ├── clustering/          # Unsupervised clustering & optimal-k
-│   │   ├── shap/                # SHAP global & local explanations
-│   │   ├── lime/                # LIME local prediction explanations
-│   │   ├── timeseries/          # Time series forecasting
-│   │   ├── advanced-ml/         # Advanced ML operations (UMAP, etc.)
-│   │   └── page.jsx             # Home / Dashboard overview
-│   ├── components/              # Reusable React components (Sidebar, Navbar, etc.)
-│   ├── lib/                     # API client, state store (Zustand), i18n
-│   └── package.json             # Frontend dependency specification
-├── nginx/                       # Nginx reverse proxy configuration
-├── azure/                       # Azure deployment templates and scripts
-├── docker-compose.yml           # Multi-container orchestration
-├── pytest.ini                   # Pytest test runner configuration
-└── README.md                    # Project documentation
-```
-
----
-
-## 🧪 Testing & Quality Assurance
-
-Run the test suite using `pytest`:
+## 🧪 Testing & Verification
 
 ```bash
-# Run all tests
+# Run complete test suite
 pytest
 
 # Run security test suite
 pytest backend/tests/security/ -v
 
-# Run unit tests only
-pytest -m unit
-
-# Run integration tests
-pytest backend/tests/integration/ -v
-
-# Run with test coverage report
+# Run with code coverage report
 pytest --cov=backend --cov-report=term-missing
 
-# Run end-to-end verification script
+# Run end-to-end system verification
 python final_verification.py
 ```
 
 ---
 
-## ☁️ Cloud & Production Deployment
+## ☁️ Cloud Deployment
 
-For comprehensive deployment instructions across different environments, refer to [`DEPLOYMENT_GUIDE.md`](./DEPLOYMENT_GUIDE.md):
-
-- **Microsoft Azure**: Deploy to Azure Container Apps via `deploy-to-azure.sh` or `deploy-to-azure.bat`.
-- **Amazon Web Services (AWS)**: Deploy using `deploy-cloud-aws.sh`.
-- **Google Cloud Platform (GCP)**: Deploy using `deploy-cloud-gcp.sh`.
-- **Docker Desktop**: Deploy locally with `deploy-docker-desktop.ps1`.
+- **Azure Container Apps**: Run `deploy-to-azure.bat` (Windows) or `./deploy-to-azure.sh` (Linux).
+- **AWS**: Run `./deploy-cloud-aws.sh`.
+- **GCP**: Run `./deploy-cloud-gcp.sh`.
 
 ---
 
-## 🤝 Contributing
+## 📝 License & Maintainer
 
-1. Fork the repository.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4. Run tests and lint checks (`pytest`).
-5. Push to the branch (`git push origin feature/AmazingFeature`).
-6. Open a Pull Request.
+Proprietary software developed by **PT. Asmer Sahabat Sukses**.
 
----
+- **Support**: support@asmeranda.ai
+- **Interactive Documentation**: `/docs`
 
-## 📝 License & Support
-
-This project is proprietary software developed by **PT. Asmer Sahabat Sukses**.
-
-- **Email**: support@asmeranda.ai
-- **Documentation**: Inline docstrings & Swagger UI at `/docs`
-
----
-
-**Asmeranda AI — End-to-End Modular Machine Learning Platform**  
 © 2024–2026 PT. Asmer Sahabat Sukses. All rights reserved.
