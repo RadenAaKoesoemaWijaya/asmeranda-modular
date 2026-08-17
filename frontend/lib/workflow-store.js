@@ -26,6 +26,7 @@ const DEFAULTS = {
   language: "id",
   clusteringResults: null,
   optimizationResults: null,
+  advancedMLResults: null,
 };
 
 export const useWorkflow = create(
@@ -52,6 +53,7 @@ export const useWorkflow = create(
           cvScores: null,
           clusteringResults: null,
           optimizationResults: null,
+          advancedMLResults: null,
         }),
       resetTraining: () =>
         set({
@@ -61,6 +63,7 @@ export const useWorkflow = create(
           cvScores: null,
           clusteringResults: null,
           optimizationResults: null,
+          advancedMLResults: null,
         }),
 
       canProceedTo: (step) => {
@@ -84,6 +87,8 @@ export const useWorkflow = create(
             return !!s.modelId;
           case "timeseries":
             return !!s.datasetId;
+          case "advanced_ml":
+            return !!s.stateId; // Advanced ML requires preprocessing
           default:
             return false;
         }

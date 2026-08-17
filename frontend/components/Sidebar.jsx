@@ -35,6 +35,12 @@ const STEPS = [
     can: "timeseries",
     icon: "📈",
   },
+  {
+    href: "/advanced-ml",
+    key: "nav.advanced_ml",
+    can: "preprocessing",
+    icon: "🚀",
+  },
 ];
 
 export default function Sidebar() {

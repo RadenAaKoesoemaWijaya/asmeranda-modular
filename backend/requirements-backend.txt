@@ -39,11 +39,13 @@ lightgbm>=4.1.0
 catboost>=1.2.0
 
 # ── Forecasting / Clustering ───────────────────────────────────
-# prophet>=1.1.5   # Opsional: butuh Stan (berat, ~400MB). Uncomment jika diperlukan.
+prophet>=1.1.5   # Opsional: butuh Stan (berat, ~400MB). Uncomment jika diperlukan.
 optuna>=3.5.0
 kmodes>=0.12.0
 
 # ── Advanced (opsional, auto-fallback jika tidak ada) ──────────
-# interpret>=0.4.0
-# umap-learn>=0.5.4
-# hdbscan>=0.8.30
+interpret>=0.4.0
+umap-learn>=0.5.4
+hdbscan>=0.8.30
+tensorflow>=2.13.0  # For LSTM forecasting
+scikit-image>=0.21.0  # For advanced image processing

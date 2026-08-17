@@ -170,6 +170,105 @@ class ClusteringResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Advanced ML
+# ---------------------------------------------------------------------------
+class UMAPRequest(BaseModel):
+    state_id: str
+    n_components: int = 2
+    n_neighbors: int = 15
+    min_dist: float = 0.1
+
+
+class HDBSCANRequest(BaseModel):
+    state_id: str
+    min_cluster_size: int = 5
+    min_samples: Optional[int] = None
+    metric: str = 'euclidean'
+
+
+class AnomalyDetectionRequest(BaseModel):
+    state_id: str
+    method: str = 'isolation_forest'  # isolation_forest | one_class_svm
+    contamination: float = 0.1
+    n_estimators: int = 100
+
+
+class ForecastingRequest(BaseModel):
+    state_id: str
+    target_column: str
+    periods: int = 10
+    method: str = 'arima'  # arima | sarima | prophet | lstm | simple | moving_avg | linear
+
+
+class MissingValueRequest(BaseModel):
+    state_id: str
+    strategy: str = 'auto'
+    numeric_strategy: str = 'mean'
+    categorical_strategy: str = 'mode'
+    threshold: float = 0.5
+
+
+class OutlierDetectionRequest(BaseModel):
+    state_id: str
+    method: str = 'iqr'
+    threshold: float = 1.5
+    columns: Optional[list] = None
+
+
+class DataValidationRequest(BaseModel):
+    state_id: str
+    required_columns: Optional[list] = None
+    column_types: Optional[dict] = None
+    value_ranges: Optional[dict] = None
+
+
+class UMAPResponse(BaseModel):
+    success: bool
+    data: Optional[dict] = None
+    method: Optional[str] = None
+    parameters: Optional[dict] = None
+    error: Optional[str] = None
+
+
+class AdvancedClusteringResponse(BaseModel):
+    success: bool
+    labels: Optional[list] = None
+    method: Optional[str] = None
+    parameters: Optional[dict] = None
+    n_clusters: Optional[int] = None
+    n_noise: Optional[int] = None
+    error: Optional[str] = None
+
+
+class AdvancedAnomalyDetectionResponse(BaseModel):
+    success: bool
+    anomaly_labels: Optional[list] = None
+    anomaly_scores: Optional[list] = None
+    method: Optional[str] = None
+    parameters: Optional[dict] = None
+    n_anomalies: Optional[int] = None
+    anomaly_rate: Optional[float] = None
+    error: Optional[str] = None
+
+
+class AdvancedForecastingResponse(BaseModel):
+    success: bool
+    forecast: Optional[list] = None
+    method: Optional[str] = None
+    parameters: Optional[dict] = None
+    last_observed: Optional[float] = None
+    error: Optional[str] = None
+
+
+class DataProcessingResponse(BaseModel):
+    success: bool
+    data: Optional[dict] = None
+    original_shape: Optional[tuple] = None
+    new_shape: Optional[tuple] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
 # Optimization
 # ---------------------------------------------------------------------------
 class OptimizationConfig(BaseModel):

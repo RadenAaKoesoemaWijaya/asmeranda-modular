@@ -37,6 +37,7 @@ try:
         timeseries,
         training,
         ws,
+        advanced_ml,
     )
     from backend.core.config import settings
 except ImportError:
@@ -49,6 +50,7 @@ except ImportError:
         timeseries,
         training,
         ws,
+        advanced_ml,
     )
     from core.config import settings
 
@@ -114,6 +116,9 @@ def create_app() -> FastAPI:
     )
     app.include_router(
         timeseries.router, prefix="/api/v1/timeseries", tags=["timeseries"]
+    )
+    app.include_router(
+        advanced_ml.router, prefix="/api/v1/advanced-ml", tags=["advanced-ml"]
     )
     app.include_router(ws.router, prefix="/api/v1/ws", tags=["websocket"])
 
