@@ -11,12 +11,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System dependencies
+# System dependencies untuk kompilasi native packages
+# (LightGBM, XGBoost, CatBoost, Prophet, UMAP, HDBSCAN, cryptography)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         gcc \
         g++ \
         libgomp1 \
+        libffi-dev \
         curl \
     && rm -rf /var/lib/apt/lists/*
 

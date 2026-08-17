@@ -7,11 +7,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System dependencies untuk kompilasi native packages (LightGBM, XGBoost, dll)
+# System dependencies untuk kompilasi native packages
+# (LightGBM, XGBoost, CatBoost, Prophet, UMAP, HDBSCAN, cryptography)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         gcc \
+        g++ \
         libgomp1 \
+        libffi-dev \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps — copy the backend requirements file explicitly so the
@@ -23,7 +27,7 @@ RUN pip install -r /tmp/requirements-backend.txt
 COPY . /app
 
 # Buat direktori data
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data /app/data/models /app/data/states /app/logs
 
 EXPOSE 8000
 
