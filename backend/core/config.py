@@ -9,27 +9,23 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 from pathlib import Path
 from typing import List, Optional
 
 # Pakai pydantic-settings bila tersedia, kalau tidak fallback ke dataclass
 try:
     from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore
+    from pydantic import Field
 
     _HAVE_PYDANTIC_SETTINGS = True
 except Exception:  # pragma: no cover
     _HAVE_PYDANTIC_SETTINGS = False
-
-try:
-    from pydantic import Field
-except Exception:  # pragma: no cover
     Field = None  # type: ignore
 
 
 # ---------------------------------------------------------------------------
 # Path absolut root project (folder berisi ``core/``, ``ml_engine/``, dll)
-# Ini agar ``backend`` bisa hidup di sub-folder tanpa khawatir
-# ``sys.path`` resolution.
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -38,6 +34,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 # Settings
 # ---------------------------------------------------------------------------
 def _build_settings():
+    default_secret = secrets.token_urlsafe(32)
+
     if _HAVE_PYDANTIC_SETTINGS:
 
         class Settings(BaseSettings):
@@ -55,18 +53,32 @@ def _build_settings():
             # Server
             host: str = "0.0.0.0"
             port: int = 8000
+            allowed_hosts: List[str] = ["localhost", "127.0.0.1", "0.0.0.0", "asmeranda.ai", "*.asmeranda.ai", "testserver"]
 
-            # CORS
-            cors_origins: List[str] = ["*"]
+            # SSL/TLS Configuration
+            ssl_enabled: bool = False
+            ssl_keyfile: Optional[Path] = None
+            ssl_certfile: Optional[Path] = None
 
-            # Storage dataset
+            # CORS - restrictive safe origins
+            cors_origins: List[str] = [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3001",
+                "https://asmeranda.ai"
+            ]
+
+            # Storage dataset & max request payload
             data_dir: Path = PROJECT_ROOT / "data"
             max_upload_size_mb: int = 200
+            max_request_size_bytes: int = 10 * 1024 * 1024  # 10MB default for non-upload requests
 
-            # Security (placeholder; diisi di F7 auth flow)
-            jwt_secret: str = "change-me-in-production"
+            # Security (JWT & API Keys)
+            jwt_secret: str = default_secret
             jwt_algorithm: str = "HS256"
             jwt_expire_minutes: int = 60 * 24
+            api_keys: List[str] = ["asmeranda-dev-api-key"]
 
             # Production safety checks
             production_mode: bool = False
@@ -76,9 +88,8 @@ def _build_settings():
 
         return Settings()
 
-    # Fallback: dataclass sederhana agar backend tetap jalan walau
-    # pydantic-settings tidak terpasang.
-    from dataclasses import dataclass
+    # Fallback: dataclass sederhana
+    from dataclasses import dataclass, field
 
     @dataclass
     class Settings:  # type: ignore[no-redef]
@@ -87,17 +98,22 @@ def _build_settings():
         debug: bool = False
         host: str = "0.0.0.0"
         port: int = 8000
-        cors_origins: List[str] = None  # type: ignore
+        allowed_hosts: List[str] = field(default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0", "asmeranda.ai", "*.asmeranda.ai", "testserver"])
+        ssl_enabled: bool = False
+        ssl_keyfile: Optional[Path] = None
+        ssl_certfile: Optional[Path] = None
+        cors_origins: List[str] = field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"])
         data_dir: Path = PROJECT_ROOT / "data"
         max_upload_size_mb: int = 200
-        jwt_secret: str = "change-me-in-production"
+        max_request_size_bytes: int = 10 * 1024 * 1024
+        jwt_secret: str = default_secret
         jwt_algorithm: str = "HS256"
         jwt_expire_minutes: int = 1440
+        api_keys: List[str] = field(default_factory=lambda: ["asmeranda-dev-api-key"])
+        production_mode: bool = False
         log_level: str = "INFO"
 
-    s = Settings()
-    s.cors_origins = ["*"]
-    return s
+    return Settings()
 
 
 settings = _build_settings()
@@ -107,7 +123,6 @@ settings = _build_settings()
 def _validate_production_safety():
     """Validate critical security settings in production mode."""
     if settings.production_mode:
-        # Check for insecure defaults in production
         warnings = []
         
         if settings.jwt_secret == "change-me-in-production":
@@ -125,7 +140,6 @@ def _validate_production_safety():
 
 
 _validate_production_safety()
-
 
 # Auto-create data dir
 os.makedirs(settings.data_dir, exist_ok=True)

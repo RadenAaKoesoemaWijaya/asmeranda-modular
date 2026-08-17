@@ -151,17 +151,22 @@ def get_state(state_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Ambil state.
 
-    - Jika ``state_id`` None dan Streamlit tersedia, kembalikan
+    - Jika ``state_id`` None dan Streamlit aktif, kembalikan
       ``st.session_state`` (mode legacy).
-    - Jika ``state_id`` None dan Streamlit tidak tersedia, buat
+    - Jika ``state_id`` None dan Streamlit tidak aktif, buat
       state default temporer (mode singleton - testing/CLI).
     - Jika ``state_id`` diberikan, ambil dari registry; bila belum ada,
       buat entry baru.
     """
     if state_id is None:
         if _ST_AVAILABLE:
-            return _st.session_state  # type: ignore[union-attr]
-        # Fallback singleton untuk CLI/uji coba
+            try:
+                # Hanya gunakan st.session_state jika context streamlit aktif
+                if hasattr(_st, "session_state") and bool(_st.session_state):
+                    return _st.session_state  # type: ignore[union-attr]
+            except Exception:
+                pass
+        # Fallback singleton untuk CLI/uji coba/FastAPI
         with _LOCK:
             if "_default" not in _STATE_REGISTRY:
                 _STATE_REGISTRY["_default"] = _new_state()
@@ -189,11 +194,14 @@ def reset_state(state_id: Optional[str] = None) -> None:
     hanya workflow keys yang di-reset (key global seperti 'language'
     dipertahankan)."""
     if state_id is None and _ST_AVAILABLE:
-        # Legacy Streamlit mode: jangan hapus semua, hanya workflow keys
-        state = _st.session_state  # type: ignore[union-attr]
-        for key, default in DEFAULT_KEYS.items():
-            state[key] = default
-        return
+        try:
+            if hasattr(_st, "session_state"):
+                state = _st.session_state  # type: ignore[union-attr]
+                for key, default in DEFAULT_KEYS.items():
+                    state[key] = default
+                return
+        except Exception:
+            pass
 
     with _LOCK:
         if state_id is None:
@@ -223,6 +231,10 @@ def list_states() -> Dict[str, Dict[str, Any]]:
         return {k: dict(v) for k, v in _STATE_REGISTRY.items()}
 
 
+# Alias for test backwards compatibility
+_states = _STATE_REGISTRY
+
+
 # ---------------------------------------------------------------------------
 # WorkflowState - thin wrapper untuk API yang lebih ergonomis
 # ---------------------------------------------------------------------------
@@ -236,6 +248,10 @@ class WorkflowState:
     def __init__(self, state_id: Optional[str] = None):
         self._state_id = state_id
         self._state = get_state(state_id)
+
+    @property
+    def state(self) -> Dict[str, Any]:
+        return self._state
 
     @property
     def state_id(self) -> Optional[str]:
@@ -263,3 +279,4 @@ class WorkflowState:
 
     def keys(self):
         return self._state.keys()
+

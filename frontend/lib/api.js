@@ -5,9 +5,11 @@
  * - Base path "/api" akan di-rewrite ke backend oleh next.config.js
  * - Untuk upload file, gunakan `apiUpload` (FormData)
  * - Untuk endpoint biasa, gunakan `apiFetch`
+ * - Otomatis menyertakan Authorization Bearer header jika token tersedia
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
+const TOKEN_KEY = "asmeranda_auth_token";
 
 export class ApiError extends Error {
   constructor(message, status, payload) {
@@ -18,12 +20,39 @@ export class ApiError extends Error {
   }
 }
 
+export function getAuthToken() {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+  return null;
+}
+
+export function setAuthToken(token) {
+  if (typeof window !== "undefined") {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  }
+}
+
+function getAuthHeaders() {
+  const token = getAuthToken();
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 export async function apiFetch(path, options = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
   const res = await fetch(url, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
       ...(options.headers || {}),
     },
     ...options,
@@ -47,13 +76,16 @@ export async function apiFetch(path, options = {}) {
 
 export async function apiUpload(path, formData, onProgress) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-  // Fetch tidak support progress untuk upload. Untuk progress, pakai
-  // XMLHttpRequest. onProgress opsional - dipanggil dengan percent (0-100).
+  const authHeaders = getAuthHeaders();
+
   if (typeof onProgress !== "function") {
     const res = await fetch(url, {
       method: "POST",
       body: formData,
       credentials: "include",
+      headers: {
+        ...authHeaders,
+      },
     });
     if (!res.ok) {
       const text = await res.text();
@@ -76,6 +108,9 @@ export async function apiUpload(path, formData, onProgress) {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
     xhr.withCredentials = true;
+    for (const [key, value] of Object.entries(authHeaders)) {
+      xhr.setRequestHeader(key, value);
+    }
     xhr.upload.onprogress = (evt) => {
       if (evt.lengthComputable) {
         onProgress(Math.round((evt.loaded / evt.total) * 100));
@@ -109,6 +144,32 @@ export async function apiUpload(path, formData, onProgress) {
 export const api = {
   // Health — endpoint di root (/health), bukan di /api/v1/health
   health: () => fetch("/health").then((r) => r.json()),
+  
+  // Auth
+  auth: {
+    login: async (username, password) => {
+      const res = await apiFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      });
+      if (res && res.access_token) {
+        setAuthToken(res.access_token);
+      }
+      return res;
+    },
+    register: (userData) =>
+      apiFetch("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(userData),
+      }),
+    me: () => apiFetch("/auth/me"),
+    logout: () => {
+      setAuthToken(null);
+    },
+    getToken: getAuthToken,
+    setToken: setAuthToken,
+  },
+
   // Datasets
   listDatasets: () => apiFetch("/datasets"),
   getDataset: (id) => apiFetch(`/datasets/${id}`),
@@ -119,6 +180,7 @@ export const api = {
   },
   deleteDataset: (id) =>
     apiFetch(`/datasets/${id}`, { method: "DELETE" }),
+  
   // EDA
   edaSummary: (id) => apiFetch(`/eda/${id}/summary`),
   edaCorrelation: (id, columns = "") =>
@@ -130,10 +192,6 @@ export const api = {
   
   // WebSocket — koneksi langsung ke backend (Next.js tidak bisa proxy WS)
   connectWebSocket: (id, onMessage) => {
-    // Tentukan URL WS: ganti http/https dengan ws/wss di NEXT_PUBLIC_API_BASE
-    // Di Docker: NEXT_PUBLIC_API_BASE=http://backend:8000 → ws://backend:8000
-    // Di lokal: default ke ws://localhost:8000
-    // Di browser, gunakan window.location.host dengan port backend yang di-expose (8000)
     const backendHttp = process.env.NEXT_PUBLIC_API_BASE || 
       (typeof window !== "undefined" 
         ? `${window.location.protocol}//${window.location.hostname}:8000`
@@ -152,7 +210,6 @@ export const api = {
         console.error("WS Parse Error:", err);
       }
     };
-    // Kirim ping setiap 30 detik agar koneksi tidak timeout
     const pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send("ping");
@@ -161,9 +218,11 @@ export const api = {
     ws.addEventListener("close", () => clearInterval(pingInterval));
     return ws;
   },
+  
   // Preprocessing
   runPreprocessing: (config) =>
     apiFetch("/preprocessing/run", { method: "POST", body: JSON.stringify(config) }),
+  
   // Training
   startTraining: (config) =>
     apiFetch("/training/start", { method: "POST", body: JSON.stringify(config) }),
@@ -182,19 +241,23 @@ export const api = {
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
     window.open(`${API_BASE}/training/models/${id}/download`, '_blank');
   },
+  
   // Clustering (using preprocessing endpoints)
   performClustering: (config) =>
     apiFetch("/preprocessing/cluster", { method: "POST", body: JSON.stringify(config) }),
   findOptimalK: (config) =>
     apiFetch("/preprocessing/optimal-k", { method: "POST", body: JSON.stringify(config) }),
+  
   // Optimization (using training endpoints)
   optimizeHyperparameters: (config) =>
     apiFetch("/training/optimize", { method: "POST", body: JSON.stringify(config) }),
   optimizeHyperparametersSync: (config) =>
     apiFetch("/training/optimize-sync", { method: "POST", body: JSON.stringify(config) }),
+  
   // Recommendations (using eda endpoints)
   analyzeDataset: (config) =>
     apiFetch("/eda/analyze", { method: "POST", body: JSON.stringify(config) }),
+  
   // Interpretation
   runShap: (payload) =>
     apiFetch("/interpretation/shap", {
@@ -206,6 +269,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  
   // Timeseries
   tsDetect: (id, target, date) =>
     apiFetch(

@@ -24,6 +24,7 @@ from backend.schemas.models import (
 from backend.services import training_service, evaluation_service
 from backend.services.optimization_service import OptimizationService
 from backend.core.config import settings
+from backend.core.security_audit import audit_logger
 from core.state import get_state
 
 logger = logging.getLogger("asmeranda.api.training")
@@ -97,6 +98,9 @@ def _train_model_background(
 @limiter.limit("5/minute")  # Limit to 5 training requests per minute per IP
 def start_training(request: Request, background_tasks: BackgroundTasks, config: TrainingConfig) -> TrainingResponse:
     """Latih model berdasarkan state hasil preprocessing (async background task)."""
+    # Get client IP for audit logging
+    client_ip = request.client.host if request.client else "unknown"
+    
     try:
         state = get_state(config.state_id)
         X_train = state.get("X_train")
@@ -112,6 +116,11 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
                     "model_type": config.model_type,
                     "problem_type": config.problem_type
                 }
+            )
+            audit_logger.log_invalid_input(
+                endpoint="/training/start",
+                reason="Invalid preprocessing state",
+                ip_address=client_ip
             )
             raise HTTPException(
                 status_code=400,
@@ -131,6 +140,14 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
             config.hyperparams or {},
             config.cv_method,
             config.cv_folds,
+        )
+        
+        # Log training start
+        audit_logger.log_model_training(
+            model_type=config.model_type,
+            problem_type=config.problem_type,
+            ip_address=client_ip,
+            success=True
         )
         
         # Return immediate response indicating training started
@@ -159,6 +176,12 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
                 "model_type": config.model_type,
                 "error_type": type(exc).__name__
             }
+        )
+        audit_logger.log_model_training(
+            model_type=config.model_type,
+            problem_type=config.problem_type,
+            ip_address=client_ip,
+            success=False
         )
         raise HTTPException(status_code=500, detail=f"Training start error: {str(exc)}")
 

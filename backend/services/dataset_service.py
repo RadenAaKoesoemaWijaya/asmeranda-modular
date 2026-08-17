@@ -18,6 +18,7 @@ import pandas as pd
 import polars as pl
 
 from backend.core.config import settings
+from backend.core.security_utils import sql_validator
 
 
 # In-memory metadata registry (dataset_id -> metadata).

@@ -79,13 +79,13 @@ class TestMissingValueHandling:
         """Test forward fill imputation."""
         df = sample_df_with_nulls.select("age").fill_null(strategy="forward")
         # Check no nulls remain
-        assert df.null_count().sum() == 0
+        assert df["age"].null_count() == 0
 
     def test_drop_rows_with_nulls(self, sample_df_with_nulls):
         """Test dropping rows dengan nulls."""
         df_clean = sample_df_with_nulls.drop_nulls()
         # All nulls should be gone
-        assert df_clean.null_count().sum() == 0
+        assert df_clean.null_count().to_numpy().sum() == 0
         # Should have fewer rows
         assert len(df_clean) < len(sample_df_with_nulls)
 
