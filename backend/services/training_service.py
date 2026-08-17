@@ -27,8 +27,10 @@ from sklearn.ensemble import (
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
+    balanced_accuracy_score,
     classification_report,
     f1_score,
+    matthews_corrcoef,
     mean_absolute_error,
     mean_squared_error,
     r2_score,
@@ -156,7 +158,7 @@ def _build_stacking_ensemble(model_type: str, problem_type: str, hyperparams: Op
 
 def _build_model(model_type: str, problem_type: str, hyperparams: Optional[Dict[str, Any]] = None):
     """Factory model sesuai tipe."""
-    hp = hyperparams or {}
+    hp = (hyperparams or {}).copy()
     is_clf = problem_type == "Classification"
 
     mt = model_type.lower()
@@ -181,9 +183,9 @@ def _build_model(model_type: str, problem_type: str, hyperparams: Optional[Dict[
     if mt in ("catboost") and CATBOOST_AVAILABLE:
         return (CatBoostClassifier if is_clf else CatBoostRegressor)(random_state=42, verbose=False, **hp)
     if mt in ("voting", "votingclassifier", "votingregressor"):
-        return _build_voting_ensemble(model_type, problem_type, hyperparams)
+        return _build_voting_ensemble(model_type, problem_type, hp)
     if mt in ("stacking", "stackingclassifier", "stackingregressor"):
-        return _build_stacking_ensemble(model_type, problem_type, hyperparams)
+        return _build_stacking_ensemble(model_type, problem_type, hp)
     raise ValueError(f"Model type {model_type} tidak dikenali atau library tidak terpasang.")
 
 
@@ -193,7 +195,12 @@ def _make_cv(cv_method: str, n_splits: int, y=None):
     if cv_method == "stratified":
         if y is None or y.nunique() < 2:
             return KFold(n_splits=n_splits, shuffle=True, random_state=42)
-        return StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        min_class_count = int(y.value_counts().min())
+        if min_class_count < 2:
+            return KFold(n_splits=n_splits, shuffle=True, random_state=42)
+        # Adapt n_splits if minority class count is smaller than n_splits
+        effective_splits = max(2, min(n_splits, min_class_count))
+        return StratifiedKFold(n_splits=effective_splits, shuffle=True, random_state=42)
     if cv_method == "loo":
         return LeaveOneOut()
     if cv_method == "timeseries":
@@ -204,7 +211,9 @@ def _make_cv(cv_method: str, n_splits: int, y=None):
 def _score_classification(y_true, y_pred, y_proba=None) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
+        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
         "f1_macro": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
+        "mcc": float(matthews_corrcoef(y_true, y_pred)),
         "report": classification_report(y_true, y_pred, zero_division=0, output_dict=True),
     }
     try:

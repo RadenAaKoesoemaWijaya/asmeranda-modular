@@ -207,13 +207,63 @@ def _feature_selection(
     return X, X.columns.tolist(), info
 
 
+def auto_configure_pipeline(df: pd.DataFrame, target_column: Optional[str] = None, problem_type: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Otomatis mendeteksi karakteristik data dan menghasilkan konfigurasi preprocessing optimal.
+    """
+    n_rows, n_cols = df.shape
+    num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+    cat_cols = df.select_dtypes(include=["object", "category", "bool"]).columns.tolist()
+    if target_column and target_column in num_cols:
+        num_cols = [c for c in num_cols if c != target_column]
+    if target_column and target_column in cat_cols:
+        cat_cols = [c for c in cat_cols if c != target_column]
+
+    config: Dict[str, Any] = {
+        "imputation_strategy": "median" if len(num_cols) > 0 else "auto",
+        "scaling_method": "auto",
+        "apply_encoding": True,
+        "test_size": 0.2,
+        "random_state": 42,
+    }
+
+    # Skewness & Scaling choice
+    if num_cols:
+        skewness = df[num_cols].skew().abs().mean()
+        if skewness > 1.5:
+            config["scaling_method"] = "robust"
+        elif skewness > 0.8:
+            config["scaling_method"] = "power"
+        else:
+            config["scaling_method"] = "standard"
+
+    # Dimensionality & Feature Selection
+    if n_cols > 30 and n_rows > 50:
+        config["feature_selection"] = {
+            "method": "variance" if n_cols > 100 else "correlation",
+            "threshold": 0.90 if n_cols <= 50 else 0.80,
+            "max_features": min(30, n_cols),
+        }
+
+    # Imbalance Detection
+    if target_column and target_column in df.columns and problem_type == "Classification":
+        vc = df[target_column].value_counts(normalize=True)
+        if len(vc) >= 2 and vc.min() < 0.20:
+            config["imbalance_handling"] = {
+                "method": "smote" if len(df) > 100 else "oversample",
+                "sampling_strategy": "auto",
+            }
+
+    return config
+
+
 def _handle_imbalance(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     method: str,
     sampling_strategy: str,
 ) -> Tuple[pd.DataFrame, pd.Series, Dict[str, Any]]:
-    """Handle imbalance dataset menggunakan imblearn."""
+    """Handle imbalance dataset menggunakan imblearn dengan adaptive k_neighbors."""
     info: Dict[str, Any] = {"method": method, "sampling_strategy": sampling_strategy}
     
     if method == "none" or not method:
@@ -223,21 +273,34 @@ def _handle_imbalance(
         from imblearn.over_sampling import SMOTE, RandomOverSampler, ADASYN
         from imblearn.under_sampling import RandomUnderSampler
     except ImportError:
-        # Jika imblearn tidak tersedia, return original
         info["error"] = "imblearn not installed"
         return X_train, y_train, info
     
     # Convert X_train to numeric for imblearn
     X_train_numeric = X_train.apply(pd.to_numeric, errors="coerce").fillna(0.0)
     
+    # Hitung jumlah sampel kelas minoritas
+    class_counts = y_train.value_counts()
+    min_class_count = int(class_counts.min()) if len(class_counts) > 0 else 0
+
     if method == "oversample":
         sampler = RandomOverSampler(sampling_strategy=sampling_strategy, random_state=42)
     elif method == "undersample":
         sampler = RandomUnderSampler(sampling_strategy=sampling_strategy, random_state=42)
     elif method == "smote":
-        sampler = SMOTE(sampling_strategy=sampling_strategy, random_state=42)
+        if min_class_count < 2:
+            sampler = RandomOverSampler(sampling_strategy=sampling_strategy, random_state=42)
+            info["note"] = "Minority samples < 2, fallback to RandomOverSampler"
+        else:
+            k_neighbors = min(min_class_count - 1, 5)
+            sampler = SMOTE(sampling_strategy=sampling_strategy, k_neighbors=k_neighbors, random_state=42)
     elif method == "adasyn":
-        sampler = ADASYN(sampling_strategy=sampling_strategy, random_state=42)
+        if min_class_count < 3:
+            sampler = RandomOverSampler(sampling_strategy=sampling_strategy, random_state=42)
+            info["note"] = "Minority samples < 3, fallback to RandomOverSampler"
+        else:
+            n_neighbors = min(min_class_count - 1, 5)
+            sampler = ADASYN(sampling_strategy=sampling_strategy, n_neighbors=n_neighbors, random_state=42)
     else:
         info["error"] = f"Unknown method: {method}"
         return X_train, y_train, info

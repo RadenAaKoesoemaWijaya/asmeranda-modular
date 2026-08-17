@@ -255,9 +255,10 @@ class OptimizationService:
         n_trials: int = 50,
         cv: int = 5,
         timeout: int = 300,
+        scoring: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
-        """Perform Bayesian optimization using Optuna."""
+        """Perform Bayesian optimization using Optuna with adaptive scoring and CV guards."""
         if not OPTUNA_AVAILABLE:
             return {
                 "success": False,
@@ -267,10 +268,16 @@ class OptimizationService:
 
         try:
             import optuna
-            from sklearn.model_selection import cross_val_score
+            from sklearn.model_selection import cross_val_score, StratifiedKFold, KFold
 
             # Get parameter distributions
             param_distributions = self.param_distributions.get(model_type, {})
+            if not param_distributions:
+                # Fallback check for case-insensitive matches
+                for k, v in self.param_distributions.items():
+                    if k.lower() == model_type.lower():
+                        param_distributions = v
+                        break
             if not param_distributions:
                 return {
                     "success": False,
@@ -278,7 +285,19 @@ class OptimizationService:
                 }
 
             # Determine scoring metric
-            scoring = "accuracy" if problem_type == "Classification" else "r2"
+            if scoring is None:
+                scoring = "accuracy" if problem_type == "Classification" else "r2"
+
+            # Determine CV strategy
+            if problem_type == "Classification" and hasattr(y_train, "value_counts"):
+                min_class_count = int(y_train.value_counts().min())
+                effective_cv = max(2, min(cv, min_class_count)) if min_class_count >= 2 else KFold(n_splits=cv, shuffle=True, random_state=42)
+                if isinstance(effective_cv, int):
+                    cv_splitter = StratifiedKFold(n_splits=effective_cv, shuffle=True, random_state=42)
+                else:
+                    cv_splitter = effective_cv
+            else:
+                cv_splitter = KFold(n_splits=cv, shuffle=True, random_state=42)
 
             def objective(trial):
                 # Suggest parameters
@@ -287,9 +306,14 @@ class OptimizationService:
                     if isinstance(param_values[0], (int, float)):
                         # Numeric parameter
                         if len(param_values) > 2:
-                            params[param_name] = trial.suggest_float(
-                                param_name, min(param_values), max(param_values)
-                            )
+                            if all(isinstance(v, int) for v in param_values):
+                                params[param_name] = trial.suggest_int(
+                                    param_name, min(param_values), max(param_values)
+                                )
+                            else:
+                                params[param_name] = trial.suggest_float(
+                                    param_name, min(param_values), max(param_values)
+                                )
                         else:
                             params[param_name] = trial.suggest_categorical(
                                 param_name, param_values
@@ -307,12 +331,13 @@ class OptimizationService:
 
                 # Perform cross-validation
                 scores = cross_val_score(
-                    model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1
+                    model, X_train, y_train, cv=cv_splitter, scoring=scoring, n_jobs=-1
                 )
-                return scores.mean()
+                return float(scores.mean())
 
-            # Create study
-            study = optuna.create_study(direction="maximize")
+            # Create study with MedianPruner
+            pruner = optuna.pruners.MedianPruner() if hasattr(optuna.pruners, "MedianPruner") else None
+            study = optuna.create_study(direction="maximize", pruner=pruner)
             study.optimize(objective, n_trials=n_trials, timeout=timeout)
 
             # Get best parameters
@@ -329,6 +354,7 @@ class OptimizationService:
                 "best_score": float(best_score),
                 "best_model": best_model,
                 "n_trials": n_trials,
+                "scoring": scoring,
                 "method": "bayesian",
             }
 

@@ -25,6 +25,9 @@ class WorkflowValidator:
                 "n_samples_train",
                 "n_samples_test",
             ],
+            "training_to_evaluation": ["model_id", "model_type"],
+            "training_to_xai": ["model_id", "model_type"],
+            "eda_to_clustering": ["dataset_id"],
         }
 
     def validate(self, step_name: str) -> Dict[str, Any]:
@@ -34,7 +37,7 @@ class WorkflowValidator:
         Parameters
         ----------
         step_name : str
-            Step transition name (e.g. 'upload_to_eda', 'eda_to_preprocessing', 'preprocessing_to_training')
+            Step transition name (e.g. 'upload_to_eda', 'eda_to_preprocessing', 'preprocessing_to_training', 'training_to_evaluation', 'training_to_xai', 'eda_to_clustering')
             
         Returns
         -------
@@ -61,6 +64,14 @@ class WorkflowValidator:
                 errors.append("Kolom target belum ditentukan.")
             if self.state.get("n_samples_train") is None or self.state.get("n_samples_test") is None:
                 errors.append("Tahap preprocessing belum selesai (data train/test belum siap).")
+
+        elif step_name in ("training_to_evaluation", "training_to_xai"):
+            if not self.state.get("model_id"):
+                errors.append("Model belum dilatih atau model_id tidak ditemukan.")
+
+        elif step_name == "eda_to_clustering":
+            if not self.state.get("dataset_id"):
+                errors.append("Dataset belum dipilih untuk analisis clustering.")
 
         else:
             # Generic field checking for custom steps
