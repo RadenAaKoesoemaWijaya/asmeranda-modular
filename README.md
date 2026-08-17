@@ -1,232 +1,204 @@
 # Asmeranda AI
 
-An enterprise-grade modular machine learning platform delivering end-to-end data science workflows: high-throughput dataset ingestion, exploratory data analysis (EDA), automated feature engineering, supervised/unsupervised model training, Optuna hyperparameter optimization, explainable AI (SHAP & LIME), time series forecasting, and role-based security hardening.
+Platform machine learning modular berbasis enterprise untuk workflow data science end-to-end. Mulai dari upload dataset, eksplorasi data, preprocessing, pelatihan model, optimasi hyperparameter, interpretasi model (XAI), hingga deteksi anomali dan forecasting deret waktu — semua dalam satu platform terintegrasi dengan keamanan berbasis peran (RBAC).
 
 ---
 
-## 🚀 Key Features
+## 🚀 Fitur Utama
 
-### 🔐 Security & Access Control (RBAC)
-- **Role-Based Access Control (RBAC)**: Enforces access tiers (`Admin`, `Analyst`, `Viewer`).
-- **JWT & API Key Authentication**: Cryptographically signed access tokens and high-entropy service API keys.
-- **Password Strength Policy**: Minimum length, uppercase, lowercase, numeric, and special character enforcement.
-- **Security Middlewares**:
-  - `SecurityHeadersMiddleware`: Injects `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `CSP`, and `HSTS`.
-  - `RequestSizeLimitMiddleware`: Payload size restrictions against HTTP 413 Denial-of-Service.
-- **Rate Limiting**: Endpoint-level rate limiting powered by SlowAPI.
-- **Audit Logging**: Structured JSON security trail (`security_audit.log`) tracking authentication, training invocations, and policy violations.
+### 🔐 Keamanan & Kontrol Akses
+- **RBAC (Role-Based Access Control)**: Tiga tingkat akses — `Admin`, `Analyst`, dan `Viewer`.
+- **JWT & API Key**: Token sesi terenkripsi dan kunci API layanan.
+- **Validasi Password**: Aturan kompleksitas ketat (huruf besar, kecil, angka, simbol).
+- **Security Middleware**: Header keamanan HTTP, pembatasan ukuran payload (anti-DoS), dan rate limiting via SlowAPI.
+- **Audit Log**: Jejak aktivitas terstruktur di `security_audit.log`.
 
-### 🧠 Core Machine Learning & Auto-Optimization
-- **Supervised Learning**: 9+ built-in algorithms (RandomForest, XGBoost, LightGBM, CatBoost, GradientBoosting, SVM, DecisionTree, KNN, Logistic/Linear Regression).
-- **Validation Schemes**: K-Fold, Stratified K-Fold, Leave-One-Out, and Time-Series Splits.
-- **Automated Hyperparameter Optimization**: Grid Search, Random Search, and Bayesian Optimization via Optuna.
-- **Smart Recommendations**: Rule-based algorithm selection and preprocessing presets tailored to data shape.
-- **Comprehensive Evaluation**: ROC-AUC, PR Curves, Confusion Matrices, MCC, MAPE, Balanced Accuracy, and Learning Curves.
+### 🧠 Machine Learning Supervised
+- **9+ Algoritma**: RandomForest, XGBoost, LightGBM, CatBoost, GradientBoosting, SVM, DecisionTree, KNN, Regresi Logistik/Linear.
+- **Validasi Silang**: K-Fold, Stratified K-Fold, Leave-One-Out, Time Series Split.
+- **Optimasi Hiperparameter**: Grid Search, Random Search, dan Bayesian Optimization via Optuna.
+- **Rekomendasi Otomatis**: Saran algoritma dan pipeline preprocessing berdasarkan karakteristik dataset.
+- **Evaluasi Lengkap**: ROC-AUC, PR Curve, Confusion Matrix, MCC, MAPE, Balanced Accuracy, Learning Curve.
 
-### 🔍 Unsupervised Learning & Dimensionality Reduction
-- **Clustering**: KMeans, DBSCAN, Hierarchical, Spectral, and HDBSCAN.
-- **Cluster Diagnostics**: Automated Elbow method and Silhouette score evaluation for Optimal-K detection.
-- **Dimensionality Reduction**: 2D/3D projection using UMAP and PCA.
+### 🔍 Machine Learning Unsupervised & Reduksi Dimensi
+- **Clustering**: KMeans, DBSCAN, Hierarchical, Spectral, dan HDBSCAN.
+- **Optimal-K**: Analisis otomatis via Elbow Method dan Silhouette Score.
+- **Reduksi Dimensi**: UMAP dan PCA untuk visualisasi data berdimensi tinggi (2D/3D).
 
 ### 💡 Explainable AI (XAI)
-- **SHAP (SHapley Additive exPlanations)**: TreeExplainer, LinearExplainer, and KernelExplainer with feature importance summary.
-- **LIME (Local Interpretable Model-agnostic Explanations)**: Local tabular prediction explanations.
+- **SHAP**: Feature importance global menggunakan TreeExplainer, LinearExplainer, dan KernelExplainer.
+- **LIME**: Penjelasan prediksi lokal per instance untuk data tabular.
 
-### 📈 Time Series & Anomaly Detection
-- **Time Series Forecasting**: ARIMA, SARIMA, Prophet, LSTM, and moving averages with automated frequency inference.
-- **Anomaly Detection**: Tabular and temporal anomaly detection using Isolation Forest and One-Class SVM.
+### 📈 Time Series & Deteksi Anomali
+- **Forecasting**: ARIMA, SARIMA, Prophet, LSTM, dan rata-rata bergerak dengan inferensi frekuensi otomatis.
+- **Deteksi Anomali**: Isolation Forest, One-Class SVM, dan batas statistik rolling.
 
-### ⚡ High-Throughput Data Ingestion & Preprocessing
-- **Polars Engine**: Lightning-fast columnar parsing, SIMD vectorization, and LazyFrame parquet scanning.
-- **Feature Engineering Pipeline**: Smart type inference, missing value imputation, robust outlier filtering, categorical encoding, and multi-mode scalers.
-
----
-
-## 🏗️ System Architecture & Workflow
-
-```mermaid
-graph TD
-    Client[Next.js 14 Web Frontend] -->|REST / WebSocket| Nginx[Nginx Reverse Proxy]
-    Nginx -->|HTTP 8000| FastAPI[FastAPI Backend Server]
-    
-    subgraph Security Layer
-        FastAPI --> MW1[SecurityHeaders Middleware]
-        FastAPI --> MW2[RequestSizeLimit Middleware]
-        FastAPI --> MW3[SlowAPI Rate Limiter]
-        FastAPI --> MW4[RBAC & JWT Auth Guard]
-    end
-    
-    subgraph Data Processing & State
-        FastAPI --> StateReg[Thread-Safe State Manager RLock + JSON Sidecar]
-        FastAPI --> PolarsEngine[Polars Lazy Engine / Parquet Store]
-    end
-    
-    subgraph Async ML & Heavy Computation
-        FastAPI -->|BackgroundTasks| MLTrain[Model Training Engine]
-        FastAPI -->|BackgroundTasks| OptunaOpt[Optuna Hyperparameter Tuning]
-        FastAPI --> ThreadPool[Starlette ThreadPool SHAP / UMAP / EDA]
-    end
-```
-
-### 🏎️ Performance Optimizations & Bottleneck Prevention
-1. **Lazy Columnar Ingestion**: Large dataset previews use `polars.scan_parquet().slice().collect()` to prevent in-memory duplication and high memory peaks.
-2. **Non-Blocking Background Tasks**: Intensive compute tasks (Model Training, Bayesian Tuning) run asynchronously via FastAPI `BackgroundTasks`, keeping API request latency low.
-3. **Parquet Columnar Persistence**: Ingested datasets are saved as Parquet with JSON metadata sidecars, delivering 5-10x compression and fast random access.
-4. **State Isolation**: Concurrent user sessions are isolated via unique `state_id` tokens with thread-safe `RLock` synchronization.
-5. **Sample Capping for XAI**: Computationally heavy operations (SHAP, LIME, UMAP) apply controlled sampling (`max_samples`) to prevent thread pool starvation.
+### 🧹 Pemrosesan Data & EDA
+- **Inferensi Tipe Otomatis**: Deteksi kolom numerik, kategorik, datetime, dan teks.
+- **Pipeline Preprocessing**: Imputasi nilai hilang, deteksi outlier, encoding kategorik, dan scaling fitur.
+- **EDA Suite**: Statistik deskriptif, histogram distribusi, dan heatmap korelasi.
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ Teknologi yang Digunakan
 
-| Layer | Technologies |
+| Lapisan | Teknologi |
 |---|---|
 | **Backend API** | FastAPI, Pydantic v2, Uvicorn, Starlette, SlowAPI |
-| **Data Engine** | Polars, Pandas, PyArrow, NumPy |
+| **Engine Data** | Polars, Pandas, PyArrow, NumPy |
 | **Machine Learning** | scikit-learn, XGBoost, LightGBM, CatBoost, Optuna, statsmodels |
 | **Explainable AI** | SHAP, LIME |
-| **Security & Auth** | PyJWT, Direct Bcrypt, Python Secrets, SQLite Store |
-| **Frontend UI** | Next.js 14 (App Router), React 18, Zustand, Custom CSS Design System |
+| **Visualisasi** | Matplotlib, Seaborn |
+| **Keamanan & Auth** | PyJWT, Bcrypt, Cryptography, Passlib |
+| **Frontend** | Next.js 14 (App Router), React 18, Zustand, Custom CSS |
 | **Infra & DevOps** | Docker, Docker Compose, Nginx, Azure Container Apps, AWS, GCP |
 
 ---
 
-## 📦 Installation & Quickstart
+## 📦 Instalasi & Cara Menjalankan
 
-### Prerequisites
+### Prasyarat
 - **Python 3.11+**
-- **Node.js 18+** & `npm`
-- **Docker Desktop** (optional for containerized setup)
+- **Node.js 18+** dan `npm`
+- **Docker Desktop** *(opsional, untuk deployment containerized)*
 
 ---
 
-### Local Development Setup
+### Menjalankan di Lokal (Development)
 
-#### 1. Backend Service
+#### 1. Setup Backend
+
 ```bash
-# Navigate to workspace root
+# Masuk ke direktori project
 cd asmeranda-modular
 
-# Create and activate virtual environment
+# Buat dan aktifkan virtual environment
 python -m venv .venv
-# On Windows:
+
+# Windows:
 .\.venv\Scripts\activate
-# On Linux/macOS:
+# Linux/macOS:
 # source .venv/bin/activate
 
-# Install backend dependencies
+# Install dependensi backend
 pip install -r backend/requirements-backend.txt
 
-# Setup environment configuration
+# Salin konfigurasi environment
 cp .env.example .env
 
-# Run FastAPI backend with Uvicorn
+# Jalankan server FastAPI
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### 2. Frontend Application
+#### 2. Setup Frontend
+
 ```bash
-# In a separate terminal, navigate to frontend
+# Buka terminal baru, masuk ke folder frontend
 cd frontend
 
-# Install Node dependencies
+# Install paket Node.js
 npm install
 
-# Start Next.js development server
+# Jalankan server Next.js
 npm run dev
 ```
 
 ---
 
-### Access Points & Default Credentials
+### Akses & Kredensial Default
 
-- **Frontend App**: [http://localhost:3000](http://localhost:3000)
-- **Backend API**: [http://localhost:8000](http://localhost:8000)
-- **Swagger Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc API Reference**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+| Layanan | URL |
+|---|---|
+| **Aplikasi Web (Frontend)** | http://localhost:3000 |
+| **API Backend** | http://localhost:8000 |
+| **Dokumentasi Swagger** | http://localhost:8000/docs |
+| **ReDoc API** | http://localhost:8000/redoc |
 
-| Account | Username | Password | Role |
+| Akun | Username | Password | Role |
 |---|---|---|---|
-| **System Admin** | `admin` | `Admin@Asmeranda2026!` | `admin` |
+| **Admin** | `admin` | `Admin@Asmeranda2026!` | `admin` |
 
 ---
 
-## 🐳 Docker Deployment
-
-To build and run the multi-container stack with Docker Compose:
+## 🐳 Deployment dengan Docker
 
 ```bash
-# Build and start services (Backend, Frontend, Nginx proxy)
+# Build dan jalankan semua container (Backend + Frontend + Nginx)
 docker compose up --build -d
 
-# Inspect running containers
+# Cek status container
 docker compose ps
 
-# View service logs
+# Lihat log container
 docker compose logs -f
 
-# Teardown stack
+# Hentikan semua container
 docker compose down
 ```
 
 ---
 
-## 📊 API Reference
+## 📊 Referensi Endpoint API
 
-| Endpoint Prefix | Method | Description |
+| Endpoint | Metode | Deskripsi |
 |---|---|---|
-| `/api/v1/auth/login` | `POST` | User authentication & JWT access token issuance |
-| `/api/v1/auth/register` | `POST` | User registration with password policy validation |
-| `/api/v1/auth/me` | `GET` | Retrieve profile and assigned roles |
-| `/api/v1/datasets/upload` | `POST` | Upload and ingest datasets (CSV, XLSX, Parquet, JSON) |
-| `/api/v1/datasets/list` | `GET` | List all ingested datasets |
-| `/api/v1/datasets/{id}/preview`| `GET` | Paginated dataset preview via Polars LazyFrame |
-| `/api/v1/eda/summary` | `POST` | Descriptive statistics, data types & missing value audit |
-| `/api/v1/preprocessing/run` | `POST` | Execute imputation, scaling, and train-test splitting |
-| `/api/v1/preprocessing/cluster`| `POST` | Run unsupervised clustering (KMeans, DBSCAN, etc.) |
-| `/api/v1/training/start` | `POST` | Asynchronous model training dispatch |
-| `/api/v1/training/models` | `GET` | Retrieve list and metrics of trained models |
-| `/api/v1/training/evaluate` | `POST` | Comprehensive performance metrics and confusion matrices |
-| `/api/v1/optimization/hyperparameters` | `POST` | Bayesian optimization with Optuna |
-| `/api/v1/interpretation/shap` | `POST` | Global feature attribution calculation |
-| `/api/v1/interpretation/lime` | `POST` | Local instance explanation |
-| `/api/v1/timeseries/forecast` | `POST` | Time-series modeling & future period forecasting |
-| `/api/v1/advanced-ml/umap` | `POST` | High-dimensional data projection via UMAP |
-| `/health` | `GET` | Service liveness probe |
+| `/api/v1/auth/login` | `POST` | Login dan dapatkan JWT token |
+| `/api/v1/auth/register` | `POST` | Registrasi pengguna baru |
+| `/api/v1/auth/me` | `GET` | Lihat profil pengguna aktif |
+| `/api/v1/datasets/upload` | `POST` | Upload dataset (CSV, XLSX, Parquet, JSON) |
+| `/api/v1/datasets/list` | `GET` | Daftar semua dataset |
+| `/api/v1/datasets/{id}/preview` | `GET` | Preview dataset dengan paginasi |
+| `/api/v1/eda/summary` | `POST` | Statistik deskriptif dan audit missing value |
+| `/api/v1/preprocessing/run` | `POST` | Jalankan imputasi, scaling, dan train-test split |
+| `/api/v1/preprocessing/cluster` | `POST` | Clustering unsupervised |
+| `/api/v1/training/start` | `POST` | Mulai pelatihan model (asinkron) |
+| `/api/v1/training/models` | `GET` | Daftar dan metrik model yang sudah dilatih |
+| `/api/v1/optimization/hyperparameters` | `POST` | Optimasi Bayesian dengan Optuna |
+| `/api/v1/interpretation/shap` | `POST` | Hitung SHAP feature attribution |
+| `/api/v1/interpretation/lime` | `POST` | Penjelasan prediksi lokal (LIME) |
+| `/api/v1/timeseries/forecast` | `POST` | Pelatihan model & prediksi deret waktu |
+| `/api/v1/advanced-ml/umap` | `POST` | Reduksi dimensi dengan UMAP |
+| `/health` | `GET` | Cek status kesehatan layanan |
 
 ---
 
-## 🧪 Testing & Verification
+## 🧪 Testing & Verifikasi
 
 ```bash
-# Run complete test suite
+# Jalankan seluruh test suite
 pytest
 
-# Run security test suite
+# Jalankan test keamanan saja
 pytest backend/tests/security/ -v
 
-# Run with code coverage report
+# Jalankan dengan laporan code coverage
 pytest --cov=backend --cov-report=term-missing
 
-# Run end-to-end system verification
+# Verifikasi sistem end-to-end
 python final_verification.py
 ```
 
 ---
 
-## ☁️ Cloud Deployment
+## ☁️ Deployment ke Cloud
 
-- **Azure Container Apps**: Run `deploy-to-azure.bat` (Windows) or `./deploy-to-azure.sh` (Linux).
-- **AWS**: Run `./deploy-cloud-aws.sh`.
-- **GCP**: Run `./deploy-cloud-gcp.sh`.
+| Platform | Cara Deploy |
+|---|---|
+| **Azure Container Apps** | `deploy-to-azure.bat` (Windows) atau `./deploy-to-azure.sh` (Linux) |
+| **AWS** | `./deploy-cloud-aws.sh` |
+| **GCP** | `./deploy-cloud-gcp.sh` |
+| **Docker Desktop** | `./deploy-docker-desktop.ps1` |
 
 ---
 
-## 📝 License & Maintainer
+## 📝 Lisensi & Kontak
 
-Proprietary software developed by **PT. Asmer Sahabat Sukses**.
+Perangkat lunak proprietary milik **PT. Asmer Sahabat Sukses**.
 
-- **Support**: support@asmeranda.ai
-- **Interactive Documentation**: `/docs`
+- **Email Support**: support@asmeranda.ai
+- **Dokumentasi Interaktif**: Akses `/docs` setelah server berjalan
 
-© 2024–2026 PT. Asmer Sahabat Sukses. All rights reserved.
+---
+
+**Asmeranda AI — Platform Machine Learning Modular End-to-End**
+© 2024–2026 PT. Asmer Sahabat Sukses. Seluruh hak dilindungi undang-undang.
