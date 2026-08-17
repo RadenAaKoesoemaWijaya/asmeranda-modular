@@ -4,7 +4,7 @@ Pydantic schemas untuk request/response API.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -265,6 +265,49 @@ class DataProcessingResponse(BaseModel):
     data: Optional[dict] = None
     original_shape: Optional[tuple] = None
     new_shape: Optional[tuple] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Advanced Supervised ML
+# ---------------------------------------------------------------------------
+class LearningCurveRequest(BaseModel):
+    state_id: str
+    model_id: str
+    cv: int = 5
+    train_sizes: Optional[str] = None  # JSON string of list
+
+
+class ModelComparisonRequest(BaseModel):
+    state_id: str
+    model_types: Optional[str] = None  # JSON string of list
+    cv_method: str = "kfold"
+    cv_folds: int = 5
+
+
+class LearningCurveResponse(BaseModel):
+    success: bool
+    model_id: Optional[str] = None
+    plot_base64: Optional[str] = None
+    train_sizes: Optional[List[float]] = None
+    train_scores_mean: Optional[List[float]] = None
+    test_scores_mean: Optional[List[float]] = None
+    final_train_score: Optional[float] = None
+    final_test_score: Optional[float] = None
+    score_gap: Optional[float] = None
+    diagnosis: Optional[str] = None
+    scoring: Optional[str] = None
+    cv_folds: Optional[int] = None
+    error: Optional[str] = None
+
+
+class ModelComparisonResponse(BaseModel):
+    success: bool
+    problem_type: Optional[str] = None
+    results: Optional[List[Dict[str, Any]]] = None
+    ranking: Optional[List[Dict[str, Any]]] = None
+    best_model: Optional[Dict[str, Any]] = None
+    ranking_metric: Optional[str] = None
     error: Optional[str] = None
 
 

@@ -16,6 +16,8 @@ const MODELS = [
   "XGBoost",
   "LightGBM",
   "CatBoost",
+  "Voting",
+  "Stacking",
 ];
 
 const CV_METHODS = ["kfold", "stratified", "loo", "timeseries", "none"];
@@ -69,6 +71,12 @@ const HYPERPARAM_TEMPLATES = {
     learning_rate: { min: 0.01, max: 0.3, default: 0.1, type: "float" },
     depth: { min: 3, max: 10, default: 3, type: "int" },
   },
+  Voting: {
+    voting: { options: ["hard", "soft"], default: "soft", type: "select" },
+  },
+  Stacking: {
+    final_estimator: { options: ["LogisticRegression", "LinearRegression"], default: "LogisticRegression", type: "select" },
+  },
 };
 
 export default function TrainingPage() {
@@ -88,6 +96,10 @@ export default function TrainingPage() {
   const [error, setError] = useState(null);
   const [evaluationResult, setEvaluationResult] = useState(null);
   const [evaluating, setEvaluating] = useState(false);
+  const [learningCurveResult, setLearningCurveResult] = useState(null);
+  const [generatingLearningCurve, setGeneratingLearningCurve] = useState(false);
+  const [comparisonResult, setComparisonResult] = useState(null);
+  const [comparingModels, setComparingModels] = useState(false);
 
   // Reset hyperparameters when model type changes
   useEffect(() => {
@@ -159,6 +171,61 @@ export default function TrainingPage() {
       setError(e.message);
     } finally {
       setEvaluating(false);
+    }
+  }
+
+  async function runLearningCurve() {
+    if (!result || !result.model_id) {
+      setError("Train a model first before generating learning curve");
+      return;
+    }
+    
+    setGeneratingLearningCurve(true);
+    setError(null);
+    setLearningCurveResult(null);
+    try {
+      const r = await fetch('/api/v1/training/learning-curve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          state_id: stateId,
+          model_id: result.model_id,
+          cv: 5,
+          train_sizes: null
+        })
+      });
+      const data = await r.json();
+      if (!data.success) throw new Error(data.error || "Learning curve generation failed");
+      setLearningCurveResult(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGeneratingLearningCurve(false);
+    }
+  }
+
+  async function runModelComparison() {
+    setComparingModels(true);
+    setError(null);
+    setComparisonResult(null);
+    try {
+      const r = await fetch('/api/v1/training/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          state_id: stateId,
+          model_types: null,
+          cv_method: cvMethod,
+          cv_folds: Number(cvFolds)
+        })
+      });
+      const data = await r.json();
+      if (!data.success) throw new Error(data.error || "Model comparison failed");
+      setComparisonResult(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setComparingModels(false);
     }
   }
 
@@ -399,6 +466,40 @@ export default function TrainingPage() {
           </button>
           
           <button
+            onClick={runLearningCurve}
+            disabled={generatingLearningCurve}
+            style={{
+              marginTop: 16,
+              marginLeft: 8,
+              padding: "8px 16px",
+              background: "#0891b2",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 14,
+            }}
+          >
+            {generatingLearningCurve ? "Generating Learning Curve..." : "Generate Learning Curve"}
+          </button>
+          
+          <button
+            onClick={runModelComparison}
+            disabled={comparingModels}
+            style={{
+              marginTop: 16,
+              marginLeft: 8,
+              padding: "8px 16px",
+              background: "#7c3aed",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 14,
+            }}
+          >
+            {comparingModels ? "Comparing Models..." : "Compare All Models"}
+          </button>
+          
+          <button
             onClick={() => {
               const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
               window.open(`${API_BASE}/training/models/${result.model_id}/download`, '_blank');
@@ -485,6 +586,66 @@ export default function TrainingPage() {
                     </div>
                   )
                 ))}
+              </div>
+            </div>
+          )}
+          
+          {learningCurveResult && (
+            <div style={{ marginTop: 16, padding: 16, background: "#f0fdf4", borderRadius: 6, border: "1px solid #16a34a" }}>
+              <h3>📈 Learning Curve Analysis</h3>
+              <div style={{ marginBottom: 16 }}>
+                <h4>Diagnosis: <strong>{learningCurveResult.diagnosis}</strong></h4>
+                <p>Final Training Score: {learningCurveResult.final_train_score?.toFixed(4)}</p>
+                <p>Final Test Score: {learningCurveResult.final_test_score?.toFixed(4)}</p>
+                <p>Score Gap: {learningCurveResult.score_gap?.toFixed(4)}</p>
+                <p>Scoring Metric: {learningCurveResult.scoring}</p>
+              </div>
+              {learningCurveResult.plot_base64 && (
+                <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                  <h5 style={{ marginTop: 0, marginBottom: 8 }}>Learning Curve Plot</h5>
+                  <img
+                    src={`data:image/png;base64,${learningCurveResult.plot_base64}`}
+                    alt="Learning Curve"
+                    style={{ maxWidth: "100%", height: "auto" }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          
+          {comparisonResult && (
+            <div style={{ marginTop: 16, padding: 16, background: "#f0fdf4", borderRadius: 6, border: "1px solid #16a34a" }}>
+              <h3>🏆 Model Comparison Results</h3>
+              <div style={{ marginBottom: 16 }}>
+                <h4>Best Model: <strong>{comparisonResult.best_model?.model_type}</strong></h4>
+                <p>Ranking Metric: {comparisonResult.ranking_metric}</p>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <h4>Performance Ranking:</h4>
+                <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                  {comparisonResult.ranking?.map((model, index) => (
+                    <div key={index} style={{ padding: 8, borderBottom: "1px solid #e2e8f0" }}>
+                      <strong>{index + 1}. {model.model_type}</strong>
+                      <br />
+                      {comparisonResult.ranking_metric}: {model.metrics?.[comparisonResult.ranking_metric]?.toFixed(4)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h4>All Results:</h4>
+                <pre
+                  style={{
+                    background: "#0f172a",
+                    color: "#e2e8f0",
+                    padding: 12,
+                    borderRadius: 4,
+                    overflow: "auto",
+                    maxHeight: "300px",
+                  }}
+                >
+                  {JSON.stringify(comparisonResult.results, null, 2)}
+                </pre>
               </div>
             </div>
           )}

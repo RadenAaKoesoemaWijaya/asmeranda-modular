@@ -19,6 +19,10 @@ from sklearn.ensemble import (
     GradientBoostingRegressor,
     RandomForestClassifier,
     RandomForestRegressor,
+    VotingClassifier,
+    VotingRegressor,
+    StackingClassifier,
+    StackingRegressor,
 )
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import (
@@ -103,6 +107,53 @@ def _load_models_from_disk() -> None:
 _load_models_from_disk()
 
 
+def _build_voting_ensemble(model_type: str, problem_type: str, hyperparams: Optional[Dict[str, Any]] = None):
+    """Build voting ensemble with default base estimators."""
+    hp = hyperparams or {}
+    is_clf = problem_type == "Classification"
+    
+    # Default base estimators
+    if is_clf:
+        estimators = [
+            ('rf', RandomForestClassifier(random_state=42, n_estimators=100)),
+            ('gb', GradientBoostingClassifier(random_state=42, n_estimators=100)),
+            ('lr', LogisticRegression(max_iter=1000, random_state=42))
+        ]
+        voting = hp.get('voting', 'soft')  # 'hard' or 'soft'
+        return VotingClassifier(estimators=estimators, voting=voting)
+    else:
+        estimators = [
+            ('rf', RandomForestRegressor(random_state=42, n_estimators=100)),
+            ('gb', GradientBoostingRegressor(random_state=42, n_estimators=100)),
+            ('lr', LinearRegression())
+        ]
+        return VotingRegressor(estimators=estimators)
+
+
+def _build_stacking_ensemble(model_type: str, problem_type: str, hyperparams: Optional[Dict[str, Any]] = None):
+    """Build stacking ensemble with default base estimators."""
+    hp = hyperparams or {}
+    is_clf = problem_type == "Classification"
+    
+    # Default base estimators
+    if is_clf:
+        estimators = [
+            ('rf', RandomForestClassifier(random_state=42, n_estimators=100)),
+            ('gb', GradientBoostingClassifier(random_state=42, n_estimators=100)),
+            ('lr', LogisticRegression(max_iter=1000, random_state=42))
+        ]
+        final_estimator = LogisticRegression(max_iter=1000, random_state=42)
+        return StackingClassifier(estimators=estimators, final_estimator=final_estimator)
+    else:
+        estimators = [
+            ('rf', RandomForestRegressor(random_state=42, n_estimators=100)),
+            ('gb', GradientBoostingRegressor(random_state=42, n_estimators=100)),
+            ('lr', LinearRegression())
+        ]
+        final_estimator = LinearRegression()
+        return StackingRegressor(estimators=estimators, final_estimator=final_estimator)
+
+
 def _build_model(model_type: str, problem_type: str, hyperparams: Optional[Dict[str, Any]] = None):
     """Factory model sesuai tipe."""
     hp = hyperparams or {}
@@ -129,6 +180,10 @@ def _build_model(model_type: str, problem_type: str, hyperparams: Optional[Dict[
         return (LGBMClassifier if is_clf else LGBMRegressor)(random_state=42, **hp)
     if mt in ("catboost") and CATBOOST_AVAILABLE:
         return (CatBoostClassifier if is_clf else CatBoostRegressor)(random_state=42, verbose=False, **hp)
+    if mt in ("voting", "votingclassifier", "votingregressor"):
+        return _build_voting_ensemble(model_type, problem_type, hyperparams)
+    if mt in ("stacking", "stackingclassifier", "stackingregressor"):
+        return _build_stacking_ensemble(model_type, problem_type, hyperparams)
     raise ValueError(f"Model type {model_type} tidak dikenali atau library tidak terpasang.")
 
 
@@ -306,3 +361,104 @@ def delete_model(model_id: str) -> bool:
         existed = True
     _MODELS.pop(model_id, None)
     return existed
+
+
+def compare_models(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    problem_type: str,
+    model_types: Optional[List[str]] = None,
+    cv_method: str = "kfold",
+    cv_folds: int = 5,
+) -> Dict[str, Any]:
+    """
+    Compare multiple models and return performance comparison.
+    
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        Training features
+    y_train : pd.Series
+        Training target
+    X_test : pd.DataFrame
+        Test features
+    y_test : pd.Series
+        Test target
+    problem_type : str
+        'Classification' or 'Regression'
+    model_types : List[str]
+        List of model types to compare
+    cv_method : str
+        Cross-validation method
+    cv_folds : int
+        Number of CV folds
+        
+    Returns
+    -------
+    dict
+        Comparison results with metrics for each model
+    """
+    if model_types is None:
+        if problem_type == "Classification":
+            model_types = ["RandomForest", "GradientBoosting", "LogisticRegression", "DecisionTree", "KNeighbors"]
+        else:
+            model_types = ["RandomForest", "GradientBoosting", "LinearRegression", "DecisionTree", "KNeighbors"]
+    
+    results = []
+    
+    for model_type in model_types:
+        try:
+            # Train model
+            result = train(
+                X_train=X_train,
+                y_train=y_train,
+                X_test=X_test,
+                y_test=y_test,
+                model_type=model_type,
+                problem_type=problem_type,
+                cv_method=cv_method,
+                cv_folds=cv_folds,
+            )
+            
+            if result["success"]:
+                model_info = {
+                    "model_type": model_type,
+                    "model_id": result["model_id"],
+                    "metrics": result["metrics"],
+                    "cv_scores": result["cv_scores"],
+                }
+                results.append(model_info)
+            else:
+                results.append({
+                    "model_type": model_type,
+                    "error": result.get("error", "Training failed")
+                })
+        except Exception as e:
+            results.append({
+                "model_type": model_type,
+                "error": str(e)
+            })
+    
+    # Rank models by performance
+    if problem_type == "Classification":
+        ranking_key = "accuracy"
+    else:
+        ranking_key = "r2"
+    
+    valid_results = [r for r in results if "metrics" in r and ranking_key in r["metrics"]]
+    ranked_results = sorted(
+        valid_results,
+        key=lambda x: x["metrics"][ranking_key],
+        reverse=(problem_type == "Classification")
+    )
+    
+    return {
+        "success": True,
+        "problem_type": problem_type,
+        "results": results,
+        "ranking": ranked_results,
+        "best_model": ranked_results[0] if ranked_results else None,
+        "ranking_metric": ranking_key
+    }

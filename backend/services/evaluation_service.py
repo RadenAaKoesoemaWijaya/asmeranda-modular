@@ -26,9 +26,16 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
     mean_absolute_error,
+    mean_absolute_percentage_error,
     mean_squared_error,
+    median_absolute_error,
     r2_score,
+    matthews_corrcoef,
+    balanced_accuracy_score,
+    cohen_kappa_score,
+    explained_variance_score,
 )
+from sklearn.model_selection import learning_curve
 from sklearn.preprocessing import label_binarize
 
 from backend.services.training_service import load_model
@@ -223,6 +230,22 @@ def evaluate_model(
             y_test, y_pred, zero_division=0, output_dict=True
         )
         
+        # Advanced metrics
+        try:
+            metrics["balanced_accuracy"] = float(balanced_accuracy_score(y_test, y_pred))
+        except Exception:
+            pass
+        
+        try:
+            metrics["matthews_corrcoef"] = float(matthews_corrcoef(y_test, y_pred))
+        except Exception:
+            pass
+        
+        try:
+            metrics["cohen_kappa"] = float(cohen_kappa_score(y_test, y_pred))
+        except Exception:
+            pass
+        
         if y_proba is not None and len(np.unique(y_test)) == 2:
             try:
                 metrics["roc_auc"] = float(roc_auc_score(y_test, y_proba[:, 1]))
@@ -245,6 +268,22 @@ def evaluate_model(
         metrics["mae"] = float(mean_absolute_error(y_test, y_pred))
         metrics["r2"] = float(r2_score(y_test, y_pred))
         
+        # Advanced metrics
+        try:
+            metrics["mape"] = float(mean_absolute_percentage_error(y_test, y_pred))
+        except Exception:
+            pass
+        
+        try:
+            metrics["medae"] = float(median_absolute_error(y_test, y_pred))
+        except Exception:
+            pass
+        
+        try:
+            metrics["explained_variance"] = float(explained_variance_score(y_test, y_pred))
+        except Exception:
+            pass
+        
         # Generate plots
         if "residuals" in plot_types:
             plots["residuals"] = _plot_residuals(y_test, y_pred)
@@ -263,3 +302,135 @@ def evaluate_model(
         "plots": plots,
         "problem_type": problem_type,
     }
+
+
+def _plot_learning_curve(train_scores, test_scores, train_sizes, scoring: str) -> str:
+    """Generate learning curve plot."""
+    plt.figure(figsize=(10, 6))
+    
+    train_mean = np.mean(train_scores, axis=1)
+    train_std = np.std(train_scores, axis=1)
+    test_mean = np.mean(test_scores, axis=1)
+    test_std = np.std(test_scores, axis=1)
+    
+    plt.plot(train_sizes, train_mean, 'o-', color='r', label='Training score')
+    plt.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, alpha=0.1, color='r')
+    plt.plot(train_sizes, test_mean, 'o-', color='g', label='Cross-validation score')
+    plt.fill_between(train_sizes, test_mean - test_std, test_mean + test_std, alpha=0.1, color='g')
+    
+    plt.xlabel('Training examples')
+    plt.ylabel(f'{scoring.capitalize()} Score')
+    plt.title('Learning Curve')
+    plt.legend(loc='best')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    
+    return _plot_to_base64(plt)
+
+
+def generate_learning_curve(
+    model_id: str,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    problem_type: str,
+    cv: int = 5,
+    train_sizes: Optional[List[float]] = None,
+) -> Dict[str, Any]:
+    """
+    Generate learning curve to detect overfitting/underfitting.
+    
+    Parameters
+    ----------
+    model_id : str
+        ID of the trained model
+    X_train : pd.DataFrame
+        Training features
+    y_train : pd.Series
+        Training target
+    problem_type : str
+        'Classification' or 'Regression'
+    cv : int
+        Number of cross-validation folds
+    train_sizes : List[float]
+        Training sizes (fractions of total data)
+        
+    Returns
+    -------
+    dict
+        Learning curve results with plot
+    """
+    # Load model
+    model_data = load_model(model_id)
+    if model_data is None:
+        return {"success": False, "error": f"Model {model_id} not found"}
+    
+    model = model_data["model"]
+    
+    # Ensure X_train has correct features
+    feature_names = model_data.get("feature_names", [])
+    if set(feature_names).issubset(set(X_train.columns)):
+        X_train_aligned = X_train[feature_names]
+    else:
+        X_train_aligned = X_train.reindex(columns=feature_names, fill_value=0)
+    
+    # Convert to numeric
+    X_train_aligned = X_train_aligned.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    
+    # Set default train sizes
+    if train_sizes is None:
+        train_sizes = np.linspace(0.1, 1.0, 10)
+    
+    # Set scoring metric
+    if problem_type == "Classification":
+        scoring = "accuracy"
+    else:
+        scoring = "r2"
+    
+    try:
+        # Generate learning curve
+        train_sizes_abs, train_scores, test_scores = learning_curve(
+            model, X_train_aligned, y_train,
+            cv=cv,
+            scoring=scoring,
+            train_sizes=train_sizes,
+            n_jobs=-1,
+            random_state=42
+        )
+        
+        # Generate plot
+        plot_base64 = _plot_learning_curve(train_scores, test_scores, train_sizes_abs, scoring)
+        
+        # Calculate statistics
+        train_mean = np.mean(train_scores, axis=1)
+        test_mean = np.mean(test_scores, axis=1)
+        final_train_score = float(train_mean[-1])
+        final_test_score = float(test_mean[-1])
+        gap = final_train_score - final_test_score
+        
+        # Detect overfitting/underfitting
+        diagnosis = "good_fit"
+        if gap > 0.1 and final_train_score > 0.9:
+            diagnosis = "overfitting"
+        elif final_train_score < 0.7 and final_test_score < 0.7:
+            diagnosis = "underfitting"
+        elif gap > 0.15:
+            diagnosis = "high_variance"
+        
+        return {
+            "success": True,
+            "model_id": model_id,
+            "plot_base64": plot_base64,
+            "train_sizes": train_sizes_abs.tolist(),
+            "train_scores_mean": train_mean.tolist(),
+            "test_scores_mean": test_mean.tolist(),
+            "final_train_score": final_train_score,
+            "final_test_score": final_test_score,
+            "score_gap": float(gap),
+            "diagnosis": diagnosis,
+            "scoring": scoring,
+            "cv_folds": cv
+        }
+        
+    except Exception as e:
+        logger.error(f"Learning curve generation failed: {e}")
+        return {"success": False, "error": str(e)}

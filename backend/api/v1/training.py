@@ -18,7 +18,8 @@ from slowapi.util import get_remote_address
 from backend.schemas.models import (
     TrainingConfig, TrainingResponse, EvaluationConfig, 
     EvaluationResponse, PredictionRequest, PredictionResponse,
-    OptimizationConfig, OptimizationResponse
+    OptimizationConfig, OptimizationResponse,
+    LearningCurveRequest, ModelComparisonRequest
 )
 from backend.services import training_service, evaluation_service
 from backend.services.optimization_service import OptimizationService
@@ -475,3 +476,103 @@ def evaluate_with_state(config: EvaluationConfig):
     except Exception as e:
         logger.error(f"Evaluation error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
+
+
+@router.post("/learning-curve")
+def generate_learning_curve(request: LearningCurveRequest):
+    """Generate learning curve for a trained model."""
+    try:
+        state = get_state(request.state_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="State tidak ditemukan")
+        
+        X_train = state.get("X_train")
+        y_train = state.get("y_train")
+        problem_type = state.get("problem_type", "Classification")
+        
+        if X_train is None or y_train is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Training data tidak tersedia di state"
+            )
+        
+        # Parse train sizes if provided
+        import json
+        train_sizes_list = None
+        if request.train_sizes:
+            try:
+                train_sizes_list = json.loads(request.train_sizes)
+            except:
+                pass
+        
+        result = evaluation_service.generate_learning_curve(
+            model_id=request.model_id,
+            X_train=X_train,
+            y_train=y_train,
+            problem_type=problem_type,
+            cv=request.cv,
+            train_sizes=train_sizes_list
+        )
+        
+        if not result.get("success"):
+            return {"success": False, "error": result.get("error")}
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Learning curve generation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Learning curve generation failed: {str(e)}")
+
+
+@router.post("/compare")
+def compare_models(request: ModelComparisonRequest):
+    """Compare multiple models and return performance ranking."""
+    try:
+        state = get_state(request.state_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="State tidak ditemukan")
+        
+        X_train = state.get("X_train")
+        y_train = state.get("y_train")
+        X_test = state.get("X_test")
+        y_test = state.get("y_test")
+        problem_type = state.get("problem_type", "Classification")
+        
+        if X_train is None or y_train is None or X_test is None or y_test is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Training/test data tidak tersedia di state"
+            )
+        
+        # Parse model types if provided
+        import json
+        model_types_list = None
+        if request.model_types:
+            try:
+                model_types_list = json.loads(request.model_types)
+            except:
+                pass
+        
+        result = training_service.compare_models(
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            problem_type=problem_type,
+            model_types=model_types_list,
+            cv_method=request.cv_method,
+            cv_folds=request.cv_folds
+        )
+        
+        if not result.get("success"):
+            return {"success": False, "error": result.get("error")}
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Model comparison error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Model comparison failed: {str(e)}")
