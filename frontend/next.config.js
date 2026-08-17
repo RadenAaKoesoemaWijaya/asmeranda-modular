@@ -11,12 +11,11 @@ const nextConfig = {
     // - Local development: http://localhost:8000
     // - Docker: http://backend:8000 (Docker network)
     // - Cloud: Production URL from environment variable
-    const apiBase =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
-    
-    // If using Docker network, use the service name
-    const dockerApiBase = process.env.DOCKER_API_BASE || "http://backend:8000";
-    const finalApiBase = process.env.DOCKER_MODE === "true" ? dockerApiBase : apiBase;
+    const isDocker = process.env.DOCKER_MODE === "true" || process.env.DOCKER_API_BASE !== undefined;
+    const finalApiBase =
+      process.env.DOCKER_API_BASE ||
+      process.env.NEXT_PUBLIC_API_BASE ||
+      (isDocker ? "http://backend:8000" : "http://localhost:8000");
     
     return [
       {

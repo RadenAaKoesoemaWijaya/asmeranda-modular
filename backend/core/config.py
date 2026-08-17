@@ -50,22 +50,44 @@ def _build_settings():
             app_version: str = "0.1.0"
             debug: bool = False
 
-            # Server
+            # Server & Hosts
             host: str = "0.0.0.0"
             port: int = 8000
-            allowed_hosts: List[str] = ["localhost", "127.0.0.1", "0.0.0.0", "asmeranda.ai", "*.asmeranda.ai", "testserver"]
+            allowed_hosts: List[str] = [
+                "*",
+                "localhost",
+                "127.0.0.1",
+                "0.0.0.0",
+                "backend",
+                "asmeranda-backend",
+                "frontend",
+                "asmeranda-frontend",
+                "nginx",
+                "asmeranda-nginx",
+                "asmeranda.ai",
+                "*.asmeranda.ai",
+                "testserver"
+            ]
 
             # SSL/TLS Configuration
             ssl_enabled: bool = False
             ssl_keyfile: Optional[Path] = None
             ssl_certfile: Optional[Path] = None
 
-            # CORS - restrictive safe origins
+            # CORS - safe origins for dev, docker, and prod
             cors_origins: List[str] = [
+                "http://localhost",
+                "http://127.0.0.1",
+                "http://localhost:80",
+                "http://127.0.0.1:80",
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://localhost:3001",
                 "http://127.0.0.1:3001",
+                "http://localhost:8000",
+                "http://127.0.0.1:8000",
+                "http://backend:8000",
+                "http://frontend:3000",
                 "https://asmeranda.ai"
             ]
 
@@ -98,11 +120,11 @@ def _build_settings():
         debug: bool = False
         host: str = "0.0.0.0"
         port: int = 8000
-        allowed_hosts: List[str] = field(default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0", "asmeranda.ai", "*.asmeranda.ai", "testserver"])
+        allowed_hosts: List[str] = field(default_factory=lambda: ["*", "localhost", "127.0.0.1", "0.0.0.0", "backend", "asmeranda-backend", "frontend", "asmeranda-frontend", "nginx", "asmeranda-nginx", "asmeranda.ai", "*.asmeranda.ai", "testserver"])
         ssl_enabled: bool = False
         ssl_keyfile: Optional[Path] = None
         ssl_certfile: Optional[Path] = None
-        cors_origins: List[str] = field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"])
+        cors_origins: List[str] = field(default_factory=lambda: ["http://localhost", "http://127.0.0.1", "http://localhost:80", "http://127.0.0.1:80", "http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://localhost:8000", "http://127.0.0.1:8000", "http://backend:8000", "http://frontend:3000", "https://asmeranda.ai"])
         data_dir: Path = PROJECT_ROOT / "data"
         max_upload_size_mb: int = 200
         max_request_size_bytes: int = 10 * 1024 * 1024

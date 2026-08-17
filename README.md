@@ -120,19 +120,42 @@ npm run dev
 
 ---
 
-## 🐳 Deployment dengan Docker
+## 🐳 Deployment & Pemeliharaan dengan Docker
 
+### 1. Menjalankan / Build Pertama Kali
 ```bash
-# Build dan jalankan semua container (Backend + Frontend + Nginx)
+# Build dan jalankan semua service di latar belakang (Backend + Frontend + Nginx)
 docker compose up --build -d
 
-# Cek status container
+# Cek status kesehatan kontainer (pastikan status backend "healthy")
 docker compose ps
+```
 
-# Lihat log container
+### 2. Menerapkan Update pada Aplikasi yang Sedang Berjalan
+Jika ada perubahan kode atau konfigurasi (seperti `next.config.js`, dependensi, atau backend):
+```bash
+# Opsi A: Rebuild dan restart service secara mulus (Recommended)
+docker compose up --build -d
+
+# Opsi B: Rebuild service tertentu saja (misal hanya frontend atau backend)
+docker compose up --build -d frontend
+docker compose up --build -d backend
+
+# Opsi C: Bersihkan kontainer lama lalu nyalakan ulang (Clean Restart)
+docker compose down
+docker compose up --build -d
+```
+
+### 3. Monitoring & Troubleshooting
+```bash
+# Lihat log real-time semua service
 docker compose logs -f
 
-# Hentikan semua container
+# Lihat log service tertentu (contoh: backend atau frontend)
+docker compose logs -f backend
+docker compose logs -f frontend
+
+# Hentikan semua kontainer
 docker compose down
 ```
 

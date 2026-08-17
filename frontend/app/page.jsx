@@ -101,19 +101,35 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let timer = null;
+
+    const checkHealth = async () => {
       try {
         const r = await fetch("/health");
         if (cancelled) return;
-        const data = await r.json();
-        setInfo(data);
-        setStatus(data.status === "ok" ? "ok" : "error");
+        if (r.ok) {
+          const data = await r.json();
+          setInfo(data);
+          if (data.status === "ok") {
+            setStatus("ok");
+            return;
+          }
+        }
+        setStatus("error");
+        timer = setTimeout(checkHealth, 3000);
       } catch {
         if (cancelled) return;
         setStatus("error");
+        timer = setTimeout(checkHealth, 3000);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+
+    checkHealth();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   return (
