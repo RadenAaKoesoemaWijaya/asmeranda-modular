@@ -4,8 +4,8 @@ services:
   # Backend FastAPI Service
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: asmeranda-backend
     ports:
       - "8000:8000"
@@ -15,9 +15,10 @@ services:
       - DEBUG=false
       - DATA_DIR=/app/data
       - MAX_UPLOAD_SIZE_MB=100
+      - PYTHONPATH=/app
     volumes:
       - ./data:/app/data
-      - ./backend:/app
+      - ./backend:/app/backend
     networks:
       - asmeranda-network
     healthcheck:

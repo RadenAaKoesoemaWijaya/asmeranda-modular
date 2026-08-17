@@ -1,28 +1,32 @@
 FROM python:3.11-slim
 
-WORKDIR /project
+WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     gcc \
     g++ \
+    libgomp1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements-backend.txt .
+COPY backend/requirements-backend.txt /app/requirements.txt
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements-backend.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy entire project structure
-COPY . .
+# Copy project source
+COPY . /app
 
-# Set PYTHONPATH to include both project root and backend directory
-ENV PYTHONPATH=/project:$PYTHONPATH
+# Set PYTHONPATH so backend package is always importable
+ENV PYTHONPATH=/app:$PYTHONPATH \
+    ASMERANDA_HOST=0.0.0.0 \
+    ASMERANDA_PORT=8000
 
-# Create data directory
-RUN mkdir -p /project/data
+# Create runtime directories
+RUN mkdir -p /app/data /app/models /app/uploads /app/logs
 
 # Expose port
 EXPOSE 8000
@@ -32,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

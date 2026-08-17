@@ -5,10 +5,20 @@ import logging
 import sys
 from pathlib import Path
 
-# Setup sys.path for both local development and Docker
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+# Setup sys.path and package resolution for both local development and Docker/Cloud
+_CURRENT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _CURRENT_DIR.parent
+
+for _p in [str(_PROJECT_ROOT), str(_CURRENT_DIR)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+if "backend" not in sys.modules and _CURRENT_DIR.name == "backend":
+    import types
+    _backend_pkg = types.ModuleType("backend")
+    _backend_pkg.__path__ = [str(_CURRENT_DIR)]
+    _backend_pkg.__file__ = str(_CURRENT_DIR / "__init__.py")
+    sys.modules["backend"] = _backend_pkg
 
 from fastapi import FastAPI, Request, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +28,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# Use relative imports for Docker compatibility
+# Import routers and core utilities
 try:
     from backend.api.v1 import (
         auth,
