@@ -1,6 +1,32 @@
 # Asmeranda AI
 
-Platform machine learning modular berbasis enterprise untuk workflow data science end-to-end. Mulai dari upload dataset, eksplorasi data, preprocessing, pelatihan model, optimasi hyperparameter, interpretasi model (XAI), hingga deteksi anomali dan forecasting deret waktu — semua dalam satu platform terintegrasi dengan keamanan berbasis peran (RBAC).
+Platform machine learning modular berbasis enterprise untuk workflow data science *end-to-end*. Mulai dari upload dataset, eksplorasi data (EDA), preprocessing adaptif, pelatihan model, optimasi hyperparameter, interpretasi model (XAI), hingga deteksi anomali dan forecasting deret waktu — semua dalam satu platform terintegrasi dengan keamanan berbasis peran (RBAC).
+
+---
+
+## 🏗️ Arsitektur Sistem & Topologi Docker
+
+```mermaid
+graph TD
+    User([Pengguna / Browser]) -->|HTTP Port 80 / 443| Nginx[Nginx Reverse Proxy]
+    
+    subgraph Docker Network [asmeranda-network]
+        Nginx -->|/ & static assets| Frontend[Frontend: Next.js 14 App Router :3000]
+        Nginx -->|/api/* & /health| Backend[Backend: FastAPI + Uvicorn :8000]
+        Frontend -.->|API Calls| Backend
+        Backend --> CoreEngine[ML Engine & Services]
+        Backend --> Storage[(Volume: /app/data & SQLite)]
+    end
+
+    subgraph ML Engine & Services
+        CoreEngine --> Preprocessing[Preprocessing & Imputation]
+        CoreEngine --> Training[Supervised ML & AutoML]
+        CoreEngine --> Unsupervised[Clustering & UMAP/PCA]
+        CoreEngine --> Explainable[XAI: SHAP & LIME]
+        CoreEngine --> TimeSeries[Prophet & Statsmodels]
+        CoreEngine --> OptunaOpt[Bayesian Optuna]
+    end
+```
 
 ---
 
@@ -8,9 +34,9 @@ Platform machine learning modular berbasis enterprise untuk workflow data scienc
 
 ### 🔐 Keamanan & Kontrol Akses
 - **RBAC (Role-Based Access Control)**: Tiga tingkat akses — `Admin`, `Analyst`, dan `Viewer`.
-- **JWT & API Key**: Token sesi terenkripsi dan kunci API layanan.
-- **Validasi Password**: Aturan kompleksitas ketat (huruf besar, kecil, angka, simbol).
-- **Security Middleware**: Header keamanan HTTP, pembatasan ukuran payload (anti-DoS), dan rate limiting via SlowAPI.
+- **JWT & API Key**: Token sesi terenkripsi AES-256/GCM dan kunci API layanan.
+- **Validasi Password**: Aturan kompleksitas ketat (huruf besar, kecil, angka, simbol, panjang minimum).
+- **Security Middleware**: Header keamanan HTTP (CSP, HSTS, X-Frame-Options), proteksi DoS, dan rate limiting adaptif via SlowAPI.
 - **Audit Log**: Jejak aktivitas terstruktur di `security_audit.log`.
 
 ### 🧠 Machine Learning Supervised
@@ -51,165 +77,199 @@ Platform machine learning modular berbasis enterprise untuk workflow data scienc
 | **Visualisasi** | Matplotlib, Seaborn |
 | **Keamanan & Auth** | PyJWT, Bcrypt, Cryptography, Passlib |
 | **Frontend** | Next.js 14 (App Router), React 18, Zustand, Custom CSS |
-| **Infra & DevOps** | Docker, Docker Compose, Nginx, Azure Container Apps, AWS, GCP |
+| **Infra & Container** | Docker, Docker Compose, Nginx (Alpine), Multi-stage build |
+| **Cloud Target** | Azure Container Apps, AWS, GCP |
 
 ---
 
-## 📦 Instalasi & Cara Menjalankan
+## 📦 Panduan Instalasi & Menjalankan
 
-### Prasyarat
+### Prasyarat Sistem
 - **Python 3.11+**
 - **Node.js 18+** dan `npm`
-- **Docker Desktop** *(opsional, untuk deployment containerized)*
+- **Docker Desktop** (dengan backend WSL2 aktif di Windows)
 
 ---
 
-### Menjalankan di Lokal (Development)
+### Opsi 1: Menjalankan dengan Docker Compose (Direkomendasikan)
 
-#### 1. Setup Backend
+Semua service (Backend, Frontend, dan Nginx Reverse Proxy) telah dikonfigurasi secara optimal dan terintegrasi dengan healthcheck otomatis.
+
+#### 1. Jalankan Seluruh Stack
+```bash
+# Build dan jalankan semua container di latar belakang
+docker compose up --build -d
+```
+
+#### 2. Periksa Status Kontainer
+```bash
+# Pastikan container backend berstatus "healthy" dan semua container "Up"
+docker compose ps
+```
+
+#### 3. Akses Layanan Melalui Docker
+- **Aplikasi Web (via Nginx)**: [http://localhost](http://localhost) (Port 80)
+- **Aplikasi Web Langsung (Frontend)**: [http://localhost:3000](http://localhost:3000)
+- **API Backend Langsung**: [http://localhost:8000](http://localhost:8000)
+- **Dokumentasi Swagger API**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health Check Endpoint**: [http://localhost:8000/health](http://localhost:8000/health)
+
+#### 4. Perintah Operasional Docker
+```bash
+# Melihat log real-time
+docker compose logs -f
+
+# Melihat log backend saja
+docker compose logs -f backend
+
+# Melihat log frontend saja
+docker compose logs -f frontend
+
+# Update/rebuild satu service tertentu
+docker compose up --build -d backend
+docker compose up --build -d frontend
+
+# Menghentikan seluruh container
+docker compose down
+```
+
+---
+
+### Opsi 2: Menjalankan Secara Lokal (Development)
+
+#### 1. Setup Backend FastAPI
 
 ```bash
-# Masuk ke direktori project
+# Masuk ke root direktori
 cd asmeranda-modular
 
-# Buat dan aktifkan virtual environment
+# Buat virtual environment
 python -m venv .venv
 
-# Windows:
-.\.venv\Scripts\activate
+# Aktivasi virtual environment
+# Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+# Windows (CMD):
+# .\.venv\Scripts\activate.bat
 # Linux/macOS:
 # source .venv/bin/activate
 
 # Install dependensi backend
 pip install -r backend/requirements-backend.txt
 
-# Salin konfigurasi environment
+# Buat file konfigurasi .env dari contoh
 cp .env.example .env
 
-# Jalankan server FastAPI
+# Jalankan server FastAPI dengan auto-reload
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### 2. Setup Frontend
+#### 2. Setup Frontend Next.js
 
 ```bash
-# Buka terminal baru, masuk ke folder frontend
+# Buka terminal baru, masuk ke direktori frontend
 cd frontend
 
 # Install paket Node.js
 npm install
 
-# Jalankan server Next.js
+# Jalankan development server Next.js
 npm run dev
 ```
 
 ---
 
-### Akses & Kredensial Default
+## 🔑 Kredensial Default
 
-| Layanan | URL |
-|---|---|
-| **Aplikasi Web (Frontend)** | http://localhost:3000 |
-| **API Backend** | http://localhost:8000 |
-| **Dokumentasi Swagger** | http://localhost:8000/docs |
-| **ReDoc API** | http://localhost:8000/redoc |
-
-| Akun | Username | Password | Role |
+| Akun | Username | Password Default | Role |
 |---|---|---|---|
-| **Admin** | `admin` | `Admin@Asmeranda2026!` | `admin` |
+| **Administrator** | `admin` | `Admin@Asmeranda2026!` | `admin` |
+
+> [!TIP]
+> Demi keamanan, segera ganti password administrator melalui antarmuka pengguna atau file konfigurasi saat melakukan deployment produksi.
 
 ---
 
-## 🐳 Deployment & Pemeliharaan dengan Docker
-
-### 1. Menjalankan / Build Pertama Kali
-```bash
-# Build dan jalankan semua service di latar belakang (Backend + Frontend + Nginx)
-docker compose up --build -d
-
-# Cek status kesehatan kontainer (pastikan status backend "healthy")
-docker compose ps
-```
-
-### 2. Menerapkan Update pada Aplikasi yang Sedang Berjalan
-Jika ada perubahan kode atau konfigurasi (seperti `next.config.js`, dependensi, atau backend):
-```bash
-# Opsi A: Rebuild dan restart service secara mulus (Recommended)
-docker compose up --build -d
-
-# Opsi B: Rebuild service tertentu saja (misal hanya frontend atau backend)
-docker compose up --build -d frontend
-docker compose up --build -d backend
-
-# Opsi C: Bersihkan kontainer lama lalu nyalakan ulang (Clean Restart)
-docker compose down
-docker compose up --build -d
-```
-
-### 3. Monitoring & Troubleshooting
-```bash
-# Lihat log real-time semua service
-docker compose logs -f
-
-# Lihat log service tertentu (contoh: backend atau frontend)
-docker compose logs -f backend
-docker compose logs -f frontend
-
-# Hentikan semua kontainer
-docker compose down
-```
-
----
-
-## 📊 Referensi Endpoint API
+## 📊 Referensi Endpoint API Utama
 
 | Endpoint | Metode | Deskripsi |
 |---|---|---|
-| `/api/v1/auth/login` | `POST` | Login dan dapatkan JWT token |
+| `/health` | `GET` | Cek status kesehatan sistem & versi runtime |
+| `/docs` | `GET` | Dokumentasi interaktif Swagger UI |
+| `/api/v1/auth/login` | `POST` | Login autentikasi & penerbitan token JWT |
 | `/api/v1/auth/register` | `POST` | Registrasi pengguna baru |
-| `/api/v1/auth/me` | `GET` | Lihat profil pengguna aktif |
+| `/api/v1/auth/me` | `GET` | Informasi profil pengguna aktif |
 | `/api/v1/datasets/upload` | `POST` | Upload dataset (CSV, XLSX, Parquet, JSON) |
-| `/api/v1/datasets/list` | `GET` | Daftar semua dataset |
-| `/api/v1/datasets/{id}/preview` | `GET` | Preview dataset dengan paginasi |
-| `/api/v1/eda/summary` | `POST` | Statistik deskriptif dan audit missing value |
-| `/api/v1/preprocessing/run` | `POST` | Jalankan imputasi, scaling, dan train-test split |
-| `/api/v1/preprocessing/cluster` | `POST` | Clustering unsupervised |
-| `/api/v1/training/start` | `POST` | Mulai pelatihan model (asinkron) |
-| `/api/v1/training/models` | `GET` | Daftar dan metrik model yang sudah dilatih |
-| `/api/v1/optimization/hyperparameters` | `POST` | Optimasi Bayesian dengan Optuna |
-| `/api/v1/interpretation/shap` | `POST` | Hitung SHAP feature attribution |
-| `/api/v1/interpretation/lime` | `POST` | Penjelasan prediksi lokal (LIME) |
-| `/api/v1/timeseries/forecast` | `POST` | Pelatihan model & prediksi deret waktu |
-| `/api/v1/advanced-ml/umap` | `POST` | Reduksi dimensi dengan UMAP |
-| `/health` | `GET` | Cek status kesehatan layanan |
+| `/api/v1/datasets/list` | `GET` | Daftar semua dataset yang tersimpan |
+| `/api/v1/datasets/{id}/preview` | `GET` | Preview data tabular dengan paginasi |
+| `/api/v1/eda/summary` | `POST` | Statistik deskriptif & analisis missing values |
+| `/api/v1/preprocessing/run` | `POST` | Eksekusi pipeline preprocessing & train-test split |
+| `/api/v1/preprocessing/cluster` | `POST` | Analisis clustering unsupervised |
+| `/api/v1/training/start` | `POST` | Memulai training model ML secara asinkron |
+| `/api/v1/training/models` | `GET` | Daftar model yang telah selesai dilatih beserta metriknya |
+| `/api/v1/optimization/hyperparameters` | `POST` | Hyperparameter tuning dengan Optuna Bayesian search |
+| `/api/v1/interpretation/shap` | `POST` | Kalkulasi global & local feature importance (SHAP) |
+| `/api/v1/interpretation/lime` | `POST` | Penjelasan lokal prediksi per data (LIME) |
+| `/api/v1/timeseries/forecast` | `POST` | Pelatihan model forecasting deret waktu |
+| `/api/v1/advanced-ml/umap` | `POST` | Reduksi dimensi data kompleks via UMAP |
 
 ---
 
-## 🧪 Testing & Verifikasi
+## 🧪 Testing & Verifikasi Kualitas
 
 ```bash
-# Jalankan seluruh test suite
-pytest
+# Menjalankan unit tests
+pytest backend/tests/unit/ -v
 
-# Jalankan test keamanan saja
+# Menjalankan test modul keamanan (RBAC, Auth, Rate Limiter)
 pytest backend/tests/security/ -v
 
-# Jalankan dengan laporan code coverage
-pytest --cov=backend --cov-report=term-missing
+# Menjalankan pengujian integrasi
+pytest backend/tests/integration/ -v
 
-# Verifikasi sistem end-to-end
+# Verifikasi deployment lokal & dependensi end-to-end
 python final_verification.py
+```
+
+---
+
+## 📁 Struktur Direktori
+
+```text
+asmeranda-modular/
+├── backend/                  # Source code Backend (FastAPI)
+│   ├── api/v1/               # Endpoint REST API v1
+│   ├── core/                 # Auth, Security, Config, State Management
+│   ├── models/               # Domain & database models
+│   ├── schemas/              # Pydantic schemas (request/response)
+│   ├── services/             # Core ML, EDA, XAI, Preprocessing services
+│   ├── tests/                # Test suite (unit, integration, security)
+│   ├── Dockerfile            # Container definition untuk backend
+│   ├── main.py               # FastAPI entrypoint
+│   └── requirements-backend.txt # Runtime dependencies
+├── frontend/                 # Source code Frontend (Next.js 14 App Router)
+│   ├── src/app/              # Next.js pages & routes
+│   ├── src/components/       # UI Components
+│   ├── Dockerfile            # Container definition untuk frontend
+│   └── package.json          # Node dependencies & scripts
+├── nginx/                    # Konfigurasi reverse proxy Nginx
+│   └── nginx.conf            # Nginx routing configuration
+├── data/                     # Volume penyimpanan dataset lokal
+├── docker-compose.yml        # Multi-container orchestration
+├── .env.example              # Template konfigurasi environment
+├── final_verification.py     # Script verifikasi deployment end-to-end
+└── README.md                 # Dokumentasi proyek
 ```
 
 ---
 
 ## ☁️ Deployment ke Cloud
 
-| Platform | Cara Deploy |
+| Platform | Script / File Deployment |
 |---|---|
-| **Azure Container Apps** | `deploy-to-azure.bat` (Windows) atau `./deploy-to-azure.sh` (Linux) |
-| **AWS** | `./deploy-cloud-aws.sh` |
-| **GCP** | `./deploy-cloud-gcp.sh` |
+| **Azure Container Apps** | `deploy-to-azure.bat` (Windows) / `./deploy-to-azure.sh` (Linux) |
+| **AWS ECS / EKS** | `./deploy-cloud-aws.sh` |
+| **Google Cloud Run / GKE**| `./deploy-cloud-gcp.sh` |
 | **Docker Desktop** | `./deploy-docker-desktop.ps1` |
 
 ---
@@ -223,5 +283,5 @@ Perangkat lunak proprietary milik **PT. Asmer Sahabat Sukses**.
 
 ---
 
-**Asmeranda AI — Platform Machine Learning Modular End-to-End**
+**Asmeranda AI — Platform Machine Learning Modular End-to-End**  
 © 2024–2026 PT. Asmer Sahabat Sukses. Seluruh hak dilindungi undang-undang.
