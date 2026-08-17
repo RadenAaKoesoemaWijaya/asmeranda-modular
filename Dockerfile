@@ -1,65 +1,44 @@
-# Use Python 3.9 slim base image for optimal size and compatibility
-FROM python:3.9-slim
+FROM python:3.11-slim
 
-# Set metadata
 LABEL maintainer="ASMERA NDA Team"
-LABEL description="Machine Learning Application with SHAP/LIME Interpretation"
-LABEL version="1.0.0"
+LABEL description="Asmeranda AI - Modular Machine Learning Backend"
+LABEL version="2.0.0"
 
-# Set working directory
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /app
 
-# Set environment variables for non-interactive installation
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+        g++ \
+        libgomp1 \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install system dependencies required for ML libraries
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libgomp1 \
-    libopenblas-dev \
-    liblapack-dev \
-    gfortran \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Upgrade pip and install wheel for better package management
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Copy requirements first for better Docker layer caching
-COPY docker_requirements.txt requirements.txt
-
-# Install Python dependencies
+# Copy backend requirements
+COPY backend/requirements-backend.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy application source code
+COPY . /app
 
-# Create necessary directories with proper permissions
-RUN mkdir -p /app/models /app/uploads /app/interpretation_cache \
-    && chmod 755 /app/models /app/uploads /app/interpretation_cache
+# Create necessary directories
+RUN mkdir -p /app/data /app/models /app/uploads /app/logs
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash appuser \
-    && chown -R appuser:appuser /app
-USER appuser
+EXPOSE 8000
 
-# Expose Streamlit port
-EXPOSE 8501
+ENV ASMERANDA_HOST=0.0.0.0 \
+    ASMERANDA_PORT=8000
 
-# Set Streamlit environment variables
-ENV STREAMLIT_SERVER_PORT=8501
-ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
-ENV STREAMLIT_SERVER_HEADLESS=true
-ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-ENV PYTHONPATH=/app
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Health check to verify the application is running
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+# Run FastAPI backend
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
 
-# Run the application
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]

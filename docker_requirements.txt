@@ -7,7 +7,9 @@ pydantic>=2.5.0
 pydantic-settings>=2.1.0
 python-multipart>=0.0.9
 python-jose[cryptography]>=3.3.0
+pyjwt[crypto]>=2.8.0
 passlib[bcrypt]>=1.7.4
+slowapi>=0.1.9
 
 # Data
 pandas>=2.0.0
