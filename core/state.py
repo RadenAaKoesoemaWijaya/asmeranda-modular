@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -75,6 +76,21 @@ _STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 logger = logging.getLogger("asmeranda.core.state")
 
+# ---------------------------------------------------------------------------
+# TTL & capacity constants (Fix #1)
+# ---------------------------------------------------------------------------
+_STATE_TTL_SECONDS: int = 3600      # 1 jam tanpa aktivitas → expired
+_STATE_MAX_COUNT: int = 100          # batas maksimum state in-memory
+
+# Kunci yang berisi objek non-serializable besar (DataFrame, model, dll)
+# — tidak perlu disimpan ke disk karena tidak bisa di-JSON-serialize
+_HEAVY_STATE_KEYS = frozenset({
+    "data", "processed_data",
+    "X_train", "X_test", "y_train", "y_test",
+    "model", "scaler", "encoders", "clustering_results",
+    "forecasting_models",
+})
+
 
 def _state_file_path(state_id: str) -> Path:
     """Get file path for state persistence."""
@@ -82,24 +98,43 @@ def _state_file_path(state_id: str) -> Path:
 
 
 def _save_state_to_disk(state_id: str, state: Dict[str, Any]) -> None:
-    """Save state to disk for persistence across restarts."""
+    """Save state to disk for persistence across restarts (legacy — full scan).
+    
+    Gunakan _save_state_metadata_to_disk untuk performa lebih baik.
+    """
+    _save_state_metadata_to_disk(state_id, state)
+
+
+def _save_state_metadata_to_disk(state_id: str, state: Dict[str, Any]) -> None:
+    """Simpan hanya metadata scalar ringan ke disk — skip objek berat (Fix #4).
+
+    Lebih efisien dari _save_state_to_disk karena:
+    - Tidak melakukan json.dumps per-key untuk deteksi serializability.
+    - Skip semua key yang diketahui berisi DataFrame/model besar.
+    """
     try:
-        # Filter out non-serializable objects (DataFrames, models, etc.)
-        serializable_state = {}
+        serializable_state: Dict[str, Any] = {}
         for key, value in state.items():
-            try:
-                # Try to serialize - if it fails, skip this key
-                json.dumps({key: value})
-                serializable_state[key] = value
-            except (TypeError, ValueError):
-                # Skip non-serializable objects
+            if key in _HEAVY_STATE_KEYS:
+                # Simpan None sebagai placeholder agar key tetap ada
                 serializable_state[key] = None
-        
+                continue
+            if isinstance(value, (str, int, float, bool, type(None))):
+                serializable_state[key] = value
+            elif isinstance(value, (list, dict)):
+                try:
+                    json.dumps(value)  # validasi hanya untuk list/dict
+                    serializable_state[key] = value
+                except (TypeError, ValueError):
+                    serializable_state[key] = None
+            else:
+                serializable_state[key] = None
+
         state_file = _state_file_path(state_id)
         with open(state_file, "w", encoding="utf-8") as f:
-            json.dump(serializable_state, f, ensure_ascii=False, indent=2)
+            json.dump(serializable_state, f, ensure_ascii=False)
     except Exception as exc:
-        logger.warning(f"Failed to save state {state_id} to disk: {exc}")
+        logger.warning(f"Failed to save state metadata {state_id} to disk: {exc}")
 
 
 def _load_state_from_disk(state_id: str) -> Optional[Dict[str, Any]]:
@@ -138,8 +173,58 @@ _load_all_states_from_disk()
 
 
 def _new_state() -> Dict[str, Any]:
-    """Buat dict state baru berisi default keys."""
-    return dict(DEFAULT_KEYS)
+    """Buat dict state baru berisi default keys + timestamps (Fix #1)."""
+    s = dict(DEFAULT_KEYS)
+    now = time.time()
+    s["_created_at"] = now
+    s["_accessed_at"] = now
+    return s
+
+
+def _cleanup_expired_states() -> int:
+    """Hapus state yang sudah melewati TTL atau melebihi batas kapasitas (Fix #1).
+
+    Returns
+    -------
+    int
+        Jumlah state yang dihapus.
+    """
+    now = time.time()
+    removed = 0
+    with _LOCK:
+        # 1) Hapus state yang TTL-nya sudah habis
+        expired = [
+            sid for sid, s in _STATE_REGISTRY.items()
+            if sid != "_default"
+            and isinstance(s, dict)
+            and (now - s.get("_accessed_at", s.get("_created_at", now))) > _STATE_TTL_SECONDS
+        ]
+        for sid in expired:
+            _STATE_REGISTRY.pop(sid, None)
+            try:
+                _state_file_path(sid).unlink(missing_ok=True)
+            except Exception:
+                pass
+            removed += 1
+
+        # 2) Jika masih melebihi kapasitas, hapus yang paling lama diakses
+        non_default = [sid for sid in _STATE_REGISTRY if sid != "_default"]
+        while len(non_default) > _STATE_MAX_COUNT:
+            oldest = min(
+                non_default,
+                key=lambda sid: _STATE_REGISTRY[sid].get("_accessed_at", 0),
+            )
+            _STATE_REGISTRY.pop(oldest, None)
+            try:
+                _state_file_path(oldest).unlink(missing_ok=True)
+            except Exception:
+                pass
+            non_default.remove(oldest)
+            removed += 1
+
+    if removed:
+        logger.info(f"State cleanup: removed {removed} expired/evicted states.")
+    return removed
 
 
 def new_state_id() -> str:
@@ -179,14 +264,19 @@ def get_state(state_id: Optional[str] = None) -> Dict[str, Any]:
 
 
 def set_state(state_id: Optional[str], **kwargs: Any) -> None:
-    """Update beberapa key sekaligus pada state."""
+    """Update beberapa key sekaligus pada state.
+
+    Fix #4: Hanya flush metadata ringan ke disk (bukan full state scan).
+    Objek berat (DataFrame, model) tetap hanya di in-memory registry.
+    """
     state = get_state(state_id)
-    for key, value in kwargs.items():
-        state[key] = value
-    
-    # Persist to disk if state_id is provided (not Streamlit mode)
+    state.update(kwargs)
+    # Update access timestamp
+    state["_accessed_at"] = time.time()
+
+    # Persist hanya metadata scalar ke disk (lazy — hindari disk I/O berat)
     if state_id is not None:
-        _save_state_to_disk(state_id, state)
+        _save_state_metadata_to_disk(state_id, state)
 
 
 def reset_state(state_id: Optional[str] = None) -> None:
@@ -208,6 +298,11 @@ def reset_state(state_id: Optional[str] = None) -> None:
             _STATE_REGISTRY["_default"] = _new_state()
         else:
             _STATE_REGISTRY[state_id] = _new_state()
+            # Hapus file disk lama jika ada
+            try:
+                _state_file_path(state_id).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def delete_state(state_id: str) -> None:

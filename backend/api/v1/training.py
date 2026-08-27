@@ -33,7 +33,15 @@ limiter = Limiter(key_func=get_remote_address)
 optimization_service = OptimizationService()
 
 
+import time
+import uuid
+
+# In-memory training job registry (Fix #2)
+_TRAINING_JOBS: Dict[str, Dict[str, Any]] = {}
+
+
 def _train_model_background(
+    job_id: str,
     state_id: str,
     X_train,
     y_train,
@@ -45,7 +53,11 @@ def _train_model_background(
     cv_method: str,
     cv_folds: int,
 ) -> Dict[str, Any]:
-    """Background task for model training to avoid blocking requests."""
+    """Background task for model training with comprehensive job tracking."""
+    if job_id in _TRAINING_JOBS:
+        _TRAINING_JOBS[job_id]["status"] = "RUNNING"
+        _TRAINING_JOBS[job_id]["started_at"] = time.time()
+
     try:
         result = training_service.train(
             X_train=X_train,
@@ -60,20 +72,38 @@ def _train_model_background(
         )
         
         if result.get("success"):
+            model_id = result.get("model_id")
+            if job_id in _TRAINING_JOBS:
+                _TRAINING_JOBS[job_id].update({
+                    "status": "SUCCESS",
+                    "model_id": model_id,
+                    "metrics": result.get("metrics"),
+                    "cv_scores": result.get("cv_scores"),
+                    "completed_at": time.time(),
+                })
             logger.info(
                 "Background model training completed successfully",
                 extra={
-                    "model_id": result.get("model_id"),
+                    "job_id": job_id,
+                    "model_id": model_id,
                     "model_type": model_type,
                     "problem_type": problem_type,
                     "state_id": state_id
                 }
             )
         else:
+            error_msg = result.get("error", "Unknown error during training")
+            if job_id in _TRAINING_JOBS:
+                _TRAINING_JOBS[job_id].update({
+                    "status": "FAILED",
+                    "error": error_msg,
+                    "completed_at": time.time(),
+                })
             logger.error(
                 "Background model training failed",
                 extra={
-                    "error": result.get("error"),
+                    "job_id": job_id,
+                    "error": error_msg,
                     "model_type": model_type,
                     "problem_type": problem_type,
                     "state_id": state_id
@@ -82,10 +112,17 @@ def _train_model_background(
         
         return result
     except Exception as exc:
+        if job_id in _TRAINING_JOBS:
+            _TRAINING_JOBS[job_id].update({
+                "status": "FAILED",
+                "error": str(exc),
+                "completed_at": time.time(),
+            })
         logger.error(
             "Background training error",
             exc_info=True,
             extra={
+                "job_id": job_id,
                 "state_id": state_id,
                 "model_type": model_type,
                 "error_type": type(exc).__name__
@@ -127,9 +164,23 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
                 detail="State preprocessing tidak valid (X_train/X_test/y_train/y_test hilang).",
             )
 
+        job_id = uuid.uuid4().hex
+        _TRAINING_JOBS[job_id] = {
+            "job_id": job_id,
+            "state_id": config.state_id,
+            "status": "QUEUED",
+            "model_type": config.model_type,
+            "problem_type": config.problem_type,
+            "created_at": time.time(),
+            "model_id": None,
+            "metrics": None,
+            "error": None,
+        }
+
         # Add training as background task to avoid blocking
         background_tasks.add_task(
             _train_model_background,
+            job_id,
             config.state_id,
             X_train,
             y_train,
@@ -150,10 +201,10 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
             success=True
         )
         
-        # Return immediate response indicating training started
         logger.info(
-            "Model training started in background",
+            "Model training queued in background",
             extra={
+                "job_id": job_id,
                 "state_id": config.state_id,
                 "model_type": config.model_type,
                 "problem_type": config.problem_type
@@ -162,8 +213,8 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
         
         return TrainingResponse(
             success=True,
-            model_id="pending",  # Will be updated when background task completes
-            message="Training started in background. Check /models endpoint for results."
+            model_id=job_id,  # Return job_id for status tracking
+            message=f"Training queued in background. Check /api/v1/training/jobs/{job_id} for status."
         )
     except HTTPException:
         raise
@@ -184,6 +235,21 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
             success=False
         )
         raise HTTPException(status_code=500, detail=f"Training start error: {str(exc)}")
+
+
+@router.get("/jobs")
+def list_training_jobs() -> Dict[str, Any]:
+    """List semua training job beserta statusnya."""
+    return {"jobs": list(_TRAINING_JOBS.values()), "total": len(_TRAINING_JOBS)}
+
+
+@router.get("/jobs/{job_id}")
+def get_training_job(job_id: str) -> Dict[str, Any]:
+    """Cek status spesifik training job."""
+    job = _TRAINING_JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Training job {job_id} tidak ditemukan")
+    return job
 
 
 @router.get("/models")

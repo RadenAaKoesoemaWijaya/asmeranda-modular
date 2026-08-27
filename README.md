@@ -189,11 +189,26 @@ Menyediakan paket instalasi mandiri untuk pengguna sistem operasi Windows tanpa 
 | `/api/v1/clustering/cluster` | `POST` | Analisis clustering unsupervised |
 | `/api/v1/clustering/optimal-k`| `POST` | Analisis Elbow & Silhouette Score |
 | `/api/v1/optimization/optimize` | `POST` | Hyperparameter tuning dengan Optuna Bayesian search |
-| `/api/v1/training/start` | `POST` | Memulai training model ML secara terarah |
+| `/api/v1/training/start` | `POST` | Memulai training model ML secara asynchronous dengan job tracking |
+| `/api/v1/training/jobs` | `GET` | List semua training jobs dan status eksekusi |
+| `/api/v1/training/jobs/{job_id}` | `GET` | Cek status spesifik training job (QUEUED / RUNNING / SUCCESS / FAILED) |
 | `/api/v1/training/evaluate`| `POST` | Evaluasi model komprehensif |
 | `/api/v1/interpretation/shap` | `POST` | Kalkulasi global & local feature importance (SHAP) |
 | `/api/v1/interpretation/lime` | `POST` | Penjelasan lokal prediksi per data (LIME) |
 | `/api/v1/timeseries/{id}/forecast` | `GET` | Pelatihan model forecasting deret waktu |
+| `/api/v1/ws/{channel_id}` | `WS` | WebSocket multi-channel untuk streaming status progress |
+
+---
+
+## ⚡ Optimasi Kinerja & Arsitektur (Performance & Reliability)
+
+- **TTL & State Eviction**: Manajemen memori in-memory state dengan TTL otomatis (1 jam) dan kapasitas maksimum (100 states) untuk mencegah OOM/memory leak.
+- **Lazy Metadata Persistence**: Penyimpanan state ke disk hanya untuk metadata skalar ringan, menghindari serialisasi berlebih terhadap DataFrame besar.
+- **Asynchronous Training Job Tracking**: Antrean training dengan status transparan (`QUEUED` ➔ `RUNNING` ➔ `SUCCESS`/`FAILED`) dan endpoint status polling.
+- **LRU In-Memory Dataset Caching**: Pembacaan dataset ter-cache via `lru_cache` untuk mempercepat pemrosesan EDA dan preprocessing berulang.
+- **Parallel Feature Selection**: Eksekusi RFE dengan `n_jobs=-1` dan adaptive step size untuk percepatan pemilihan fitur.
+- **Thread-Safe Clustering**: Isolasi scaler per request untuk mencegah *race condition* saat multi-user concurrent requests.
+- **Non-Blocking Fetch & Timeout**: AbortController terintegrasi di frontend API client untuk mencegah freeze saat koneksi backend lambat.
 
 ---
 

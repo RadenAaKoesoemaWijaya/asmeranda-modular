@@ -26,7 +26,7 @@ class ClusteringService:
     """Comprehensive clustering service with multiple algorithms."""
 
     def __init__(self):
-        self.scaler = StandardScaler()
+        pass
 
     def perform_clustering(
         self, data, method: str = "kmeans", **params
@@ -53,8 +53,9 @@ class ClusteringService:
             if not isinstance(data, pd.DataFrame):
                 data = pd.DataFrame(data)
 
-            # Scale data
-            X_scaled = self.scaler.fit_transform(data)
+            # Scale data using local scaler for thread safety
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(data)
 
             # Perform clustering based on method
             if method == "kmeans":

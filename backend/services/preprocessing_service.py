@@ -195,8 +195,9 @@ def _feature_selection(
         if y is None:
             return X, X.columns.tolist(), info
         k = min(max_features, X_numeric.shape[1])
-        estimator = RandomForestClassifier(n_estimators=50, random_state=42)
-        selector = RFE(estimator, n_features_to_select=k)
+        step = max(1, (X_numeric.shape[1] - k) // 5)
+        estimator = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+        selector = RFE(estimator, n_features_to_select=k, step=step)
         X_selected = selector.fit_transform(X_numeric, y)
         selected_features = X_numeric.columns[selector.get_support()].tolist()
         X_selected = pd.DataFrame(X_selected, columns=selected_features, index=X.index)

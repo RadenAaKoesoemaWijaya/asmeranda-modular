@@ -161,32 +161,32 @@ def _build_model(model_type: str, problem_type: str, hyperparams: Optional[Dict[
     hp = (hyperparams or {}).copy()
     is_clf = problem_type == "Classification"
 
-    mt = model_type.lower()
-    if mt in ("random_forst", "randomforest", "rf"):
+    mt = model_type.lower().replace("-", "_").replace(" ", "_")
+    if mt in ("random_forest", "randomforest", "rf", "random_forst"):
         return (RandomForestClassifier if is_clf else RandomForestRegressor)(random_state=42, **hp)
-    if mt in ("gradient_boosting", "gb", "gbm"):
+    if mt in ("gradient_boosting", "gradientboosting", "gb", "gbm"):
         return (GradientBoostingClassifier if is_clf else GradientBoostingRegressor)(random_state=42, **hp)
-    if mt in ("logistic", "logisticregression"):
-        return LogisticRegression(max_iter=1000, **hp)
-    if mt in ("linear", "linearregression"):
+    if mt in ("logistic", "logistic_regression", "logisticregression", "lr"):
+        return LogisticRegression(max_iter=1000, **hp) if is_clf else LinearRegression(**hp)
+    if mt in ("linear", "linear_regression", "linearregression"):
         return LinearRegression(**hp)
-    if mt in ("decision_tree", "dt"):
+    if mt in ("decision_tree", "decisiontree", "dt"):
         return (DecisionTreeClassifier if is_clf else DecisionTreeRegressor)(random_state=42, **hp)
-    if mt in ("knn", "kneighbors"):
+    if mt in ("knn", "kneighbors", "k_neighbors"):
         return (KNeighborsClassifier if is_clf else KNeighborsRegressor)(**hp)
-    if mt in ("svm", "svc", "svr"):
+    if mt in ("svm", "svc", "svr", "support_vector_machine"):
         return (SVC if is_clf else SVR)(probability=is_clf, **hp)
     if mt in ("xgboost", "xgb") and XGBOOST_AVAILABLE:
         return (XGBClassifier if is_clf else XGBRegressor)(random_state=42, **hp)
-    if mt in ("lightgbm", "lgbm") and LIGHTGBM_AVAILABLE:
+    if mt in ("lightgbm", "lgbm", "light_gbm") and LIGHTGBM_AVAILABLE:
         return (LGBMClassifier if is_clf else LGBMRegressor)(random_state=42, **hp)
-    if mt in ("catboost") and CATBOOST_AVAILABLE:
+    if mt in ("catboost", "cat_boost", "cb") and CATBOOST_AVAILABLE:
         return (CatBoostClassifier if is_clf else CatBoostRegressor)(random_state=42, verbose=False, **hp)
-    if mt in ("voting", "votingclassifier", "votingregressor"):
+    if mt in ("voting", "votingclassifier", "votingregressor", "voting_ensemble"):
         return _build_voting_ensemble(model_type, problem_type, hp)
-    if mt in ("stacking", "stackingclassifier", "stackingregressor"):
+    if mt in ("stacking", "stackingclassifier", "stackingregressor", "stacking_ensemble"):
         return _build_stacking_ensemble(model_type, problem_type, hp)
-    raise ValueError(f"Model type {model_type} tidak dikenali atau library tidak terpasang.")
+    raise ValueError(f"Model type '{model_type}' tidak dikenali atau library tidak terpasang.")
 
 
 def _make_cv(cv_method: str, n_splits: int, y=None):
@@ -296,8 +296,10 @@ def train(
         scoring = None
     if cv is not None and scoring is not None:
         try:
+            from sklearn.base import clone
+            cv_model = clone(model)
             # Use all available CPU cores for parallel cross-validation
-            scores = cross_val_score(model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
+            scores = cross_val_score(cv_model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
             cv_report = {
                 "method": cv_method,
                 "folds": cv_folds,

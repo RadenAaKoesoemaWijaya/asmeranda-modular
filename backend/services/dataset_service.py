@@ -21,8 +21,34 @@ from backend.core.config import settings
 from backend.core.security_utils import sql_validator
 
 
+from functools import lru_cache
+
 # In-memory metadata registry (dataset_id -> metadata).
 _METADATA: Dict[str, Dict[str, Any]] = {}
+
+
+@lru_cache(maxsize=32)
+def _load_parquet_cached_pl(path_str: str) -> Optional[pl.DataFrame]:
+    """Cache Polars dataframe reading for frequently accessed datasets."""
+    p = Path(path_str)
+    if not p.exists():
+        return None
+    return pl.read_parquet(p)
+
+
+@lru_cache(maxsize=32)
+def _load_parquet_cached_pd(path_str: str) -> Optional[pd.DataFrame]:
+    """Cache Pandas dataframe reading for frequently accessed datasets."""
+    p = Path(path_str)
+    if not p.exists():
+        return None
+    return pd.read_parquet(p)
+
+
+def clear_dataset_cache() -> None:
+    """Bersihkan in-memory LRU cache dataset."""
+    _load_parquet_cached_pl.cache_clear()
+    _load_parquet_cached_pd.cache_clear()
 
 
 def _metadata_path(dataset_id: str) -> Path:
@@ -102,19 +128,19 @@ def list_datasets() -> List[Dict[str, Any]]:
 
 
 def get_dataset(dataset_id: str) -> Optional[pd.DataFrame]:
-    """Load dataset dari disk sebagai pandas DataFrame (untuk kompatibilitas ML lama)."""
+    """Load dataset dari disk sebagai pandas DataFrame (dengan LRU cache)."""
     path = _metadata_path(dataset_id)
     if not path.exists():
         return None
-    return pd.read_parquet(path)
+    return _load_parquet_cached_pd(str(path))
 
 
 def get_dataset_pl(dataset_id: str) -> Optional[pl.DataFrame]:
-    """Load dataset dari disk menggunakan Polars untuk pemrosesan cepat (Big Data)."""
+    """Load dataset dari disk menggunakan Polars untuk pemrosesan cepat (dengan LRU cache)."""
     path = _metadata_path(dataset_id)
     if not path.exists():
         return None
-    return pl.read_parquet(path)
+    return _load_parquet_cached_pl(str(path))
 
 
 def get_paginated_data(dataset_id: str, page: int = 1, size: int = 50) -> Optional[Dict[str, Any]]:
@@ -240,6 +266,7 @@ def delete_dataset(dataset_id: str) -> bool:
         except Exception:
             pass
     _METADATA.pop(dataset_id, None)
+    clear_dataset_cache()
     return existed
 
 

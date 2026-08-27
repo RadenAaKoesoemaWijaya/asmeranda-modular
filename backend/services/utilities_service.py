@@ -61,7 +61,7 @@ class UtilitiesService:
             try:
                 pd.to_datetime(series.head(10), errors='raise')
                 return 'datetime'
-            except:
+            except (ValueError, TypeError, Exception):
                 # Check if it's categorical
                 if series.nunique() / len(series) < 0.5:
                     return 'categorical'
@@ -346,7 +346,7 @@ class UtilitiesService:
                         df[col] = pd.to_datetime(df[col], errors='raise')
                         date_column = col
                         break
-                    except:
+                    except (ValueError, TypeError, Exception):
                         continue
             
             if date_column and date_column in df.columns:

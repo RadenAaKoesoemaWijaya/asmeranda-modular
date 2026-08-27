@@ -125,6 +125,39 @@ def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> Respo
     return _rate_limit_exceeded_handler(request, exc)
 
 
+from contextlib import asynccontextmanager
+import asyncio
+from core.state import _cleanup_expired_states
+
+
+async def _periodic_state_cleanup_task(interval_seconds: int = 1800):
+    """Background periodic loop to clean up expired in-memory and on-disk states."""
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            removed = _cleanup_expired_states()
+            if removed:
+                logging.getLogger("asmeranda.backend").info("Periodic cleanup evicted %d expired states", removed)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logging.getLogger("asmeranda.backend").warning("Error during periodic state cleanup: %s", exc)
+
+
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown tasks."""
+    cleanup_task = asyncio.create_task(_periodic_state_cleanup_task())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+
 def create_app() -> FastAPI:
     """Factory function - memudahkan testing dan deployment."""
     # Setup logging
@@ -144,6 +177,7 @@ def create_app() -> FastAPI:
         debug=settings.debug,
         docs_url="/docs" if settings.debug or not settings.production_mode else None,
         redoc_url="/redoc" if settings.debug or not settings.production_mode else None,
+        lifespan=app_lifespan,
     )
     
     # Register rate limiter

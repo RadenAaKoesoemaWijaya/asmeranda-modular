@@ -46,6 +46,8 @@ Thumbs.db
 dist/
 build/
 *.spec
+InstallerOutput/
+*.zip
 
 # Coverage
 .coverage

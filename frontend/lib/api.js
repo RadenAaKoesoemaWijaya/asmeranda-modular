@@ -46,32 +46,52 @@ function getAuthHeaders() {
   return headers;
 }
 
+const DEFAULT_FETCH_TIMEOUT_MS = 60_000; // 60 detik timeout default
+
 export async function apiFetch(path, options = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeaders(),
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
-  const text = await res.text();
-  let payload = null;
-  if (text) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = text;
+  const timeoutMs = options.timeoutMs || DEFAULT_FETCH_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const fetchOptions = { ...options };
+  delete fetchOptions.timeoutMs;
+
+  try {
+    const res = await fetch(url, {
+      credentials: "include",
+      signal: options.signal || controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+        ...(fetchOptions.headers || {}),
+      },
+      ...fetchOptions,
+    });
+    clearTimeout(timeoutId);
+
+    const text = await res.text();
+    let payload = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = text;
+      }
     }
+    if (!res.ok) {
+      const detail =
+        (payload && (payload.detail || payload.message)) || res.statusText;
+      throw new ApiError(detail || "Request gagal", res.status, payload);
+    }
+    return payload;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") {
+      throw new ApiError(`Request timeout (${timeoutMs}ms) ke ${path}`, 408, null);
+    }
+    throw err;
   }
-  if (!res.ok) {
-    const detail =
-      (payload && (payload.detail || payload.message)) || res.statusText;
-    throw new ApiError(detail || "Request gagal", res.status, payload);
-  }
-  return payload;
 }
 
 export async function apiUpload(path, formData, onProgress) {
@@ -226,6 +246,8 @@ export const api = {
   // Training
   startTraining: (config) =>
     apiFetch("/training/start", { method: "POST", body: JSON.stringify(config) }),
+  listTrainingJobs: () => apiFetch("/training/jobs"),
+  getTrainingJob: (jobId) => apiFetch(`/training/jobs/${jobId}`),
   listModels: () => apiFetch("/training/models"),
   getModel: (id) => apiFetch(`/training/models/${id}`),
   deleteModel: (id) =>
