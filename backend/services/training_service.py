@@ -311,6 +311,32 @@ def train(
         except Exception as exc:
             cv_report = {"method": cv_method, "error": str(exc)}
 
+    # Feature Importances (if available)
+    feature_importances = []
+    if hasattr(model, "feature_importances_"):
+        try:
+            importances = model.feature_importances_.tolist()
+            feature_importances = [
+                {"feature": str(col), "importance": float(imp)}
+                for col, imp in zip(X_train.columns, importances)
+            ]
+            feature_importances.sort(key=lambda x: x["importance"], reverse=True)
+        except Exception:
+            pass
+    elif hasattr(model, "coef_"):
+        try:
+            coefs = np.abs(model.coef_)
+            if coefs.ndim > 1:
+                coefs = coefs.mean(axis=0)
+            coefs_list = coefs.tolist()
+            feature_importances = [
+                {"feature": str(col), "importance": float(imp)}
+                for col, imp in zip(X_train.columns, coefs_list)
+            ]
+            feature_importances.sort(key=lambda x: x["importance"], reverse=True)
+        except Exception:
+            pass
+
     # Save model
     model_id = uuid.uuid4().hex
     path = _MODEL_DIR / f"{model_id}.pkl"
@@ -322,6 +348,9 @@ def train(
                 "problem_type": problem_type,
                 "feature_names": list(X_train.columns),
                 "hyperparams": hyperparams or {},
+                "metrics": metrics,
+                "cv_report": cv_report,
+                "feature_importances": feature_importances,
             },
             fh,
         )
@@ -332,6 +361,7 @@ def train(
         "problem_type": problem_type,
         "metrics": metrics,
         "cv_report": cv_report,
+        "feature_importances": feature_importances,
         "path": str(path),
         "n_features": int(X_train.shape[1]),
         "feature_names": list(X_train.columns),
@@ -342,7 +372,11 @@ def train(
         "model_id": model_id,
         "metrics": metrics,
         "cv_scores": cv_report,
+        "feature_importances": feature_importances,
+        "model_type": model_type,
+        "problem_type": problem_type,
     }
+
 
 
 def list_models() -> Dict[str, Dict[str, Any]]:

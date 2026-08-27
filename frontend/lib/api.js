@@ -254,6 +254,10 @@ export const api = {
     apiFetch(`/training/models/${id}`, { method: "DELETE" }),
   evaluateModel: (config) =>
     apiFetch("/training/evaluate", { method: "POST", body: JSON.stringify(config) }),
+  generateLearningCurve: (config) =>
+    apiFetch("/training/learning-curve", { method: "POST", body: JSON.stringify(config) }),
+  compareModels: (config) =>
+    apiFetch("/training/compare", { method: "POST", body: JSON.stringify(config) }),
   predictWithModel: (id, data) =>
     apiFetch(`/training/models/${id}/predict`, { 
       method: "POST", 

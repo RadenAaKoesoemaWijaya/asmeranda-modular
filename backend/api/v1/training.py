@@ -132,14 +132,19 @@ def _train_model_background(
 
 
 @router.post("/start", response_model=TrainingResponse)
-@limiter.limit("5/minute")  # Limit to 5 training requests per minute per IP
-def start_training(request: Request, background_tasks: BackgroundTasks, config: TrainingConfig) -> TrainingResponse:
-    """Latih model berdasarkan state hasil preprocessing (async background task)."""
-    # Get client IP for audit logging
+@limiter.limit("30/minute")
+def start_training(request: Request, config: TrainingConfig) -> TrainingResponse:
+    """Latih model berdasarkan state hasil preprocessing."""
     client_ip = request.client.host if request.client else "unknown"
     
     try:
         state = get_state(config.state_id)
+        if not state:
+            raise HTTPException(
+                status_code=404,
+                detail=f"State ID '{config.state_id}' tidak ditemukan. Selesaikan preprocessing terlebih dahulu.",
+            )
+
         X_train = state.get("X_train")
         X_test = state.get("X_test")
         y_train = state.get("y_train")
@@ -161,60 +166,98 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
             )
             raise HTTPException(
                 status_code=400,
-                detail="State preprocessing tidak valid (X_train/X_test/y_train/y_test hilang).",
+                detail="State preprocessing tidak valid (X_train/X_test/y_train/y_test hilang). Silakan jalankan Preprocessing kembali.",
             )
 
         job_id = uuid.uuid4().hex
+        start_time = time.time()
+
+        # Run training
+        result = training_service.train(
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            model_type=config.model_type,
+            problem_type=config.problem_type,
+            hyperparams=config.hyperparams or {},
+            cv_method=config.cv_method,
+            cv_folds=config.cv_folds,
+        )
+
+        if not result.get("success"):
+            error_msg = result.get("error", "Gagal melatih model.")
+            _TRAINING_JOBS[job_id] = {
+                "job_id": job_id,
+                "state_id": config.state_id,
+                "status": "FAILED",
+                "model_type": config.model_type,
+                "problem_type": config.problem_type,
+                "created_at": start_time,
+                "completed_at": time.time(),
+                "error": error_msg,
+            }
+            audit_logger.log_model_training(
+                model_type=config.model_type,
+                problem_type=config.problem_type,
+                ip_address=client_ip,
+                success=False
+            )
+            return TrainingResponse(
+                success=False,
+                error=error_msg,
+                model_type=config.model_type,
+                problem_type=config.problem_type,
+            )
+
+        model_id = result.get("model_id")
         _TRAINING_JOBS[job_id] = {
             "job_id": job_id,
             "state_id": config.state_id,
-            "status": "QUEUED",
+            "status": "SUCCESS",
             "model_type": config.model_type,
             "problem_type": config.problem_type,
-            "created_at": time.time(),
-            "model_id": None,
-            "metrics": None,
-            "error": None,
+            "created_at": start_time,
+            "completed_at": time.time(),
+            "model_id": model_id,
+            "metrics": result.get("metrics"),
+            "cv_scores": result.get("cv_scores"),
+            "feature_importances": result.get("feature_importances"),
         }
 
-        # Add training as background task to avoid blocking
-        background_tasks.add_task(
-            _train_model_background,
-            job_id,
-            config.state_id,
-            X_train,
-            y_train,
-            X_test,
-            y_test,
-            config.model_type,
-            config.problem_type,
-            config.hyperparams or {},
-            config.cv_method,
-            config.cv_folds,
-        )
-        
-        # Log training start
+        # Update state with latest model info
+        state["model_id"] = model_id
+        state["model_type"] = config.model_type
+        state["metrics"] = result.get("metrics")
+        state["cv_scores"] = result.get("cv_scores")
+
         audit_logger.log_model_training(
             model_type=config.model_type,
             problem_type=config.problem_type,
             ip_address=client_ip,
             success=True
         )
-        
+
         logger.info(
-            "Model training queued in background",
+            "Model training finished successfully",
             extra={
                 "job_id": job_id,
-                "state_id": config.state_id,
+                "model_id": model_id,
                 "model_type": config.model_type,
-                "problem_type": config.problem_type
+                "problem_type": config.problem_type,
+                "state_id": config.state_id
             }
         )
-        
+
         return TrainingResponse(
             success=True,
-            model_id=job_id,  # Return job_id for status tracking
-            message=f"Training queued in background. Check /api/v1/training/jobs/{job_id} for status."
+            model_id=model_id,
+            metrics=result.get("metrics"),
+            cv_scores=result.get("cv_scores"),
+            feature_importances=result.get("feature_importances"),
+            model_type=config.model_type,
+            problem_type=config.problem_type,
+            message="Pelatihan model selesai dengan sukses.",
         )
     except HTTPException:
         raise
@@ -235,6 +278,7 @@ def start_training(request: Request, background_tasks: BackgroundTasks, config: 
             success=False
         )
         raise HTTPException(status_code=500, detail=f"Training start error: {str(exc)}")
+
 
 
 @router.get("/jobs")

@@ -39,17 +39,22 @@ graph TD
 - **Security Middleware**: Header keamanan HTTP (CSP, HSTS, X-Frame-Options), proteksi DoS, dan rate limiting adaptif via SlowAPI.
 - **Audit Log**: Jejak aktivitas terstruktur di `security_audit.log`.
 
-### 🧠 Machine Learning Supervised
-- **9+ Algoritma**: RandomForest, XGBoost, LightGBM, CatBoost, GradientBoosting, SVM, DecisionTree, KNN, Regresi Logistik/Linear.
-- **Validasi Silang**: K-Fold, Stratified K-Fold, Leave-One-Out, Time Series Split.
-- **Optimasi Hiperparameter**: Grid Search, Random Search, dan Bayesian Optimization via Optuna.
-- **Rekomendasi Otomatis**: Saran algoritma dan pipeline preprocessing berdasarkan karakteristik dataset.
-- **Evaluasi Lengkap**: ROC-AUC, PR Curve, Confusion Matrix, MCC, MAPE, Balanced Accuracy, Learning Curve.
+### 🧠 Machine Learning Supervised & Pelatihan Model
+- **12+ Algoritma Lengkap**: RandomForest, GradientBoosting, XGBoost, LightGBM, CatBoost, SVM (SVC/SVR), DecisionTree, K-Nearest Neighbors (KNN), Regresi Logistik/Linear, Voting Ensemble (Hard/Soft), dan Stacking Ensemble.
+- **Validasi Silang (Cross-Validation)**: K-Fold, Stratified K-Fold (seimbang untuk kelas minoritas), Leave-One-Out, Time Series Split, dan Train-Test Split adaptif.
+- **Tingkat Kepentingan Fitur (Feature Importance)**: Ekstraksi kontribusi fitur otomatis dengan visualisasi grafik batang interaktif untuk semua model pohon dan koefisien model linear.
+- **Diagnostik Kurva Pembelajaran (Learning Curve)**: Analisis bias vs variansi otomatis (*underfitting vs overfitting detection*) dengan grafik train-test gap.
+- **Papan Peringkat Benchmark Seluruh Model (Model Comparison Leaderboard)**: Pengujian otomatis seluruh algoritma dalam satu klik untuk menentukan model dengan skor metrik terbaik.
+- **Optimasi Hiperparameter Terintegrasi**: Sinkronisasi 1-klik dengan modul Optuna / Random Search / Grid Search.
+- **Evaluasi Mendalam & Ekspor**: ROC-AUC, PR Curve, Confusion Matrix interaktif, MCC, Balanced Accuracy, serta download artefak model (`.pkl`).
 
-### 🔍 Machine Learning Unsupervised & Reduksi Dimensi
-- **Clustering**: KMeans, DBSCAN, Hierarchical, Spectral, dan HDBSCAN.
-- **Optimal-K**: Analisis otomatis via Elbow Method dan Silhouette Score.
-- **Reduksi Dimensi**: UMAP dan PCA untuk visualisasi data berdimensi tinggi (2D/3D).
+### 🔍 Machine Learning Unsupervised & Advanced ML Suite
+- **Reduksi Dimensi Interaktif**: UMAP (*Uniform Manifold Approximation and Projection*), PCA, dan t-SNE dengan proyeksi 2D/3D, *hover tooltips*, serta pewarnaan berbasis label target.
+- **HDBSCAN Clustering**: Klasterisasi hierarkis berbasis densitas tanpa perlu menentukan $K$ di awal, lengkap dengan metrik Silhouette, Calinski-Harabasz, dan Davies-Bouldin.
+- **Deteksi Anomali (Anomaly Detection)**: Deteksi observasi menyimpang via Isolation Forest dan One-Class SVM lengkap dengan tabel outlier ekstrim dan skor anomali.
+- **Time Series Forecasting**: Peramalan deret waktu menggunakan ARIMA, Exponential Smoothing (SES), Moving Average, dan Linear Trend dengan visualisasi area batas keyakinan 95% (*Confidence Interval*).
+- **Data Utilities & Cleansing**: Pembersihan nilai hilang (imputasi cerdas) dan deteksi pencilan statistik (IQR & Z-Score) per kolom.
+
 
 ### 💡 Explainable AI (XAI)
 - **SHAP**: Feature importance global menggunakan TreeExplainer, LinearExplainer, dan KernelExplainer.

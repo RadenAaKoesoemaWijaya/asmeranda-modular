@@ -128,8 +128,12 @@ class TrainingResponse(BaseModel):
     model_id: Optional[str] = None
     metrics: Optional[Dict[str, Any]] = None
     cv_scores: Optional[Dict[str, Any]] = None
+    feature_importances: Optional[List[Dict[str, Any]]] = None
+    model_type: Optional[str] = None
+    problem_type: Optional[str] = None
     error: Optional[str] = None
-    message: Optional[str] = None  # For background task status messages
+    message: Optional[str] = None
+
 
 
 class EvaluationResponse(BaseModel):
