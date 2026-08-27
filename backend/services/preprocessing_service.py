@@ -445,7 +445,14 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
     # 6) Train-test split
     test_size = float(config.get("test_size", 0.2))
     random_state = int(config.get("random_state", 42))
-    if y is not None and problem_type in ("Classification", "Regression"):
+    if problem_type in ("Clustering", "Unsupervised"):
+        # For clustering/unsupervised learning, use full dataset for training
+        X_train = X.copy()
+        X_test = pd.DataFrame(columns=X.columns)
+        y_train = None
+        y_test = None
+        steps.append("clustering_preparation=full_dataset")
+    elif y is not None and problem_type in ("Classification", "Regression"):
         try:
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=random_state,
@@ -455,15 +462,15 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=random_state
             )
+        steps.append(f"split={1 - test_size:.2f}/{test_size:.2f}")
     else:
-        # Forecasting / unsupervised: split sequential
+        # Forecasting / general sequential: split sequential
         n = len(X)
         idx = int(n * (1 - test_size))
         X_train, X_test = X.iloc[:idx], X.iloc[idx:]
         y_train = y.iloc[:idx] if y is not None else None
         y_test = y.iloc[idx:] if y is not None else None
-
-    steps.append(f"split={1 - test_size:.2f}/{test_size:.2f}")
+        steps.append(f"split={1 - test_size:.2f}/{test_size:.2f}")
     _try_broadcast(dataset_id, 85, "Split selesai. Handling imbalance...")
 
     # 7) Handle imbalance (hanya untuk training data)

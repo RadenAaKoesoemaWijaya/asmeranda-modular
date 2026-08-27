@@ -11,7 +11,7 @@ const DEFAULTS = {
   datasetId: null,
   datasetName: null,
   targetColumn: null,
-  problemType: null,
+  problemType: null, // "Classification" | "Regression" | "Clustering" | "Forecasting"
   numericalColumns: [],
   categoricalColumns: [],
   featureNames: [],
@@ -26,6 +26,7 @@ const DEFAULTS = {
   language: "id",
   clusteringResults: null,
   optimizationResults: null,
+  optimizedHyperparams: {}, // { [modelType]: best_params }
   advancedMLResults: null,
 };
 
@@ -36,6 +37,13 @@ export const useWorkflow = create(
 
       set: (patch) => set(patch),
       reset: () => set({ ...DEFAULTS }),
+      setOptimizedHyperparams: (modelType, params) =>
+        set((state) => ({
+          optimizedHyperparams: {
+            ...(state.optimizedHyperparams || {}),
+            [modelType]: params,
+          },
+        })),
       resetPreprocessing: () =>
         set({
           stateId: null,
@@ -53,6 +61,7 @@ export const useWorkflow = create(
           cvScores: null,
           clusteringResults: null,
           optimizationResults: null,
+          optimizedHyperparams: {},
           advancedMLResults: null,
         }),
       resetTraining: () =>
@@ -66,29 +75,33 @@ export const useWorkflow = create(
           advancedMLResults: null,
         }),
 
+      // Cek apakah step tertentu siap diakses
       canProceedTo: (step) => {
         const s = get();
+        const isSupervised =
+          s.problemType === "Classification" || s.problemType === "Regression";
+        const isUnsupervised =
+          s.problemType === "Clustering" || s.problemType === "Unsupervised";
+
         switch (step) {
           case "eda":
             return !!s.datasetId;
           case "preprocessing":
-            return (
-              !!s.datasetId &&
-              (s.numericalColumns.length > 0 || s.categoricalColumns.length > 0)
-            );
-          case "clustering":
-            return !!s.stateId && !!s.problemType;
-          case "training":
-            return !!s.stateId && !!s.problemType;
+            return !!s.datasetId;
           case "optimization":
-            return !!s.stateId && !!s.problemType;
+            return !!s.stateId && isSupervised;
+          case "training":
+            return !!s.stateId && isSupervised;
           case "shap":
           case "lime":
-            return !!s.modelId;
+            return !!s.modelId && isSupervised;
+          case "clustering":
+            // Clustering aktif untuk Unsupervised, atau jika belum eksplisit tapi preprocessing selesai
+            return !!s.stateId && isUnsupervised;
           case "timeseries":
             return !!s.datasetId;
           case "advanced_ml":
-            return !!s.stateId; // Advanced ML requires preprocessing
+            return !!s.stateId;
           default:
             return false;
         }

@@ -85,6 +85,9 @@ export default function TrainingPage() {
   const set = useWorkflow((s) => s.set);
   const stateId = useWorkflow((s) => s.stateId);
   const problemType = useWorkflow((s) => s.problemType);
+  const optimizationResults = useWorkflow((s) => s.optimizationResults);
+
+  const isUnsupervised = problemType === "Clustering" || problemType === "Unsupervised";
 
   const [modelType, setModelType] = useState("RandomForest");
   const [cvMethod, setCvMethod] = useState("kfold");
@@ -101,21 +104,47 @@ export default function TrainingPage() {
   const [comparisonResult, setComparisonResult] = useState(null);
   const [comparingModels, setComparingModels] = useState(false);
 
-  // Reset hyperparameters when model type changes
+  // If optimization was run, sync modelType & hyperparams from store
   useEffect(() => {
     const template = HYPERPARAM_TEMPLATES[modelType] || {};
     const defaults = {};
-    Object.keys(template).forEach(key => {
+    Object.keys(template).forEach((key) => {
       defaults[key] = template[key].default;
     });
-    setHyperparams(defaults);
-  }, [modelType]);
+
+    // Pre-load optimized params if the model type matches
+    if (
+      optimizationResults?.model_type === modelType &&
+      optimizationResults?.best_params
+    ) {
+      setHyperparams({ ...defaults, ...optimizationResults.best_params });
+    } else {
+      setHyperparams(defaults);
+    }
+  }, [modelType, optimizationResults]);
 
   if (!stateId || !problemType) {
     return (
       <div>
         <h1>{tr("training.title")}</h1>
-        <p style={{ color: "#dc2626" }}>⚠ Jalankan preprocessing dulu.</p>
+        <div style={{ padding: 16, background: "#fef3c7", borderRadius: 6, border: "1px solid #f59e0b", color: "#92400e" }}>
+          ⚠ Selesaikan tahap <strong>Preprocessing</strong> terlebih dahulu sebelum pelatihan model.{" "}
+          <a href="/preprocessing" style={{ color: "#92400e", fontWeight: 600 }}>Buka Preprocessing →</a>
+        </div>
+      </div>
+    );
+  }
+
+  if (isUnsupervised) {
+    return (
+      <div>
+        <h1>{tr("training.title")}</h1>
+        <div style={{ padding: 16, background: "#f3f4f6", borderRadius: 6, border: "1px solid #d1d5db", color: "#374151" }}>
+          🔒 Pelatihan Model Supervised hanya tersedia untuk tipe masalah <strong>Klasifikasi</strong> dan <strong>Regresi</strong>.
+          <br />
+          Mode aktif: <strong>{problemType}</strong> — Gunakan halaman{" "}
+          <a href="/clustering" style={{ color: "#1d4ed8", fontWeight: 600 }}>Clustering Analysis →</a>
+        </div>
       </div>
     );
   }
@@ -233,8 +262,47 @@ export default function TrainingPage() {
     <div>
       <h1>{tr("training.title")}</h1>
       <p style={{ color: "#64748b" }}>
-        Problem type: <strong>{problemType}</strong>
+        Tipe masalah: <strong>{problemType}</strong>
       </p>
+
+      {/* Banner: optimized hyperparams tersedia */}
+      {optimizationResults?.model_type && optimizationResults?.best_params && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            background: "#eff6ff",
+            borderRadius: 6,
+            border: "1px solid #bfdbfe",
+            color: "#1e40af",
+          }}
+        >
+          🎯 Hyperparameter teroptimasi dari tahap <strong>Optimasi</strong> tersedia untuk model{" "}
+          <strong>{optimizationResults.model_type}</strong> (score:{" "}
+          {optimizationResults.best_score?.toFixed(4)}).
+          {modelType === optimizationResults.model_type ? (
+            <span style={{ marginLeft: 8, color: "#15803d", fontWeight: 600 }}>
+              ✓ Sudah diterapkan secara otomatis!
+            </span>
+          ) : (
+            <button
+              onClick={() => setModelType(optimizationResults.model_type)}
+              style={{
+                marginLeft: 8,
+                padding: "2px 10px",
+                background: "#1e40af",
+                color: "#fff",
+                border: "none",
+                borderRadius: 4,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              Ganti model ke {optimizationResults.model_type}
+            </button>
+          )}
+        </div>
+      )}
 
       <div
         style={{
@@ -295,7 +363,12 @@ export default function TrainingPage() {
             checked={showHyperparams}
             onChange={(e) => setShowHyperparams(e.target.checked)}
           />
-          <strong>Advanced: Configure Hyperparameters</strong>
+          <strong>Advanced: Konfigurasi Hyperparameter</strong>
+          {optimizationResults?.model_type === modelType && (
+            <span style={{ marginLeft: 8, fontSize: 12, color: "#15803d", background: "#f0fdf4", padding: "2px 6px", borderRadius: 4 }}>
+              ✓ Nilai dari Optimasi
+            </span>
+          )}
         </label>
       </div>
 

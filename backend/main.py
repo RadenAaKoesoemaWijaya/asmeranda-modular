@@ -32,11 +32,14 @@ from slowapi.errors import RateLimitExceeded
 try:
     from backend.api.v1 import (
         auth,
+        clustering,
         datasets,
         eda,
         health,
         interpretation,
+        optimization,
         preprocessing,
+        recommendations,
         timeseries,
         training,
         ws,
@@ -47,11 +50,14 @@ try:
 except ImportError:
     from api.v1 import (
         auth,
+        clustering,
         datasets,
         eda,
         health,
         interpretation,
+        optimization,
         preprocessing,
+        recommendations,
         timeseries,
         training,
         ws,
@@ -167,7 +173,25 @@ def create_app() -> FastAPI:
     app.include_router(datasets.router, prefix="/api/v1/datasets", tags=["datasets"])
     app.include_router(eda.router, prefix="/api/v1/eda", tags=["eda"])
     app.include_router(
+        recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"]
+    )
+    app.include_router(
+        recommendations.router, prefix="/api/v1/eda", tags=["recommendations-compat"], include_in_schema=False
+    )
+    app.include_router(
         preprocessing.router, prefix="/api/v1/preprocessing", tags=["preprocessing"]
+    )
+    app.include_router(
+        clustering.router, prefix="/api/v1/clustering", tags=["clustering"]
+    )
+    app.include_router(
+        clustering.router, prefix="/api/v1/preprocessing", tags=["clustering-compat"], include_in_schema=False
+    )
+    app.include_router(
+        optimization.router, prefix="/api/v1/optimization", tags=["optimization"]
+    )
+    app.include_router(
+        optimization.router, prefix="/api/v1/training", tags=["optimization-compat"], include_in_schema=False
     )
     app.include_router(training.router, prefix="/api/v1/training", tags=["training"])
     app.include_router(

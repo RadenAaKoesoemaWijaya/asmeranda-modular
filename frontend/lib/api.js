@@ -242,21 +242,21 @@ export const api = {
     window.open(`${API_BASE}/training/models/${id}/download`, '_blank');
   },
   
-  // Clustering (using preprocessing endpoints)
+  // Clustering
   performClustering: (config) =>
-    apiFetch("/preprocessing/cluster", { method: "POST", body: JSON.stringify(config) }),
+    apiFetch("/clustering/cluster", { method: "POST", body: JSON.stringify(config) }),
   findOptimalK: (config) =>
-    apiFetch("/preprocessing/optimal-k", { method: "POST", body: JSON.stringify(config) }),
+    apiFetch("/clustering/optimal-k", { method: "POST", body: JSON.stringify(config) }),
   
-  // Optimization (using training endpoints)
+  // Optimization
   optimizeHyperparameters: (config) =>
-    apiFetch("/training/optimize", { method: "POST", body: JSON.stringify(config) }),
+    apiFetch("/optimization/optimize", { method: "POST", body: JSON.stringify(config) }),
   optimizeHyperparametersSync: (config) =>
-    apiFetch("/training/optimize-sync", { method: "POST", body: JSON.stringify(config) }),
+    apiFetch("/optimization/optimize-sync", { method: "POST", body: JSON.stringify(config) }),
   
-  // Recommendations (using eda endpoints)
+  // Recommendations
   analyzeDataset: (config) =>
-    apiFetch("/eda/analyze", { method: "POST", body: JSON.stringify(config) }),
+    apiFetch("/recommendations/analyze", { method: "POST", body: JSON.stringify(config) }),
   
   // Interpretation
   runShap: (payload) =>

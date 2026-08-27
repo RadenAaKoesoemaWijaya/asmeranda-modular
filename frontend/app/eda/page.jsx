@@ -86,7 +86,20 @@ export default function EdaPage() {
     return (
       <div>
         <h1>{tr("eda.title")}</h1>
-        <p style={{ color: "#dc2626" }}>⚠ Unggah dataset dulu di halaman Data Upload.</p>
+        <div
+          style={{
+            padding: 16,
+            background: "#fef3c7",
+            borderRadius: 6,
+            border: "1px solid #f59e0b",
+            color: "#92400e",
+          }}
+        >
+          ⚠ Unggah dataset terlebih dahulu sebelum melakukan Eksplorasi Data (EDA).{" "}
+          <a href="/data-upload" style={{ color: "#92400e", fontWeight: 600 }}>
+            Buka Upload Data →
+          </a>
+        </div>
       </div>
     );
   }

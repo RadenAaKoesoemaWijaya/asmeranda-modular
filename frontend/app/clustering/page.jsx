@@ -11,6 +11,8 @@ export default function ClusteringPage() {
   const lang = useWorkflow((s) => s.language) || "id";
   const tr = useT(lang);
   const stateId = useWorkflow((s) => s.stateId);
+  const problemType = useWorkflow((s) => s.problemType);
+  const isUnsupervised = problemType === "Clustering" || problemType === "Unsupervised";
 
   const [method, setMethod] = useState("kmeans");
   const [nClusters, setNClusters] = useState(3);
@@ -25,10 +27,25 @@ export default function ClusteringPage() {
   if (!stateId) {
     return (
       <div>
-        <h1>{tr("clustering.title") || "Clustering Analysis"}</h1>
-        <p style={{ color: "#dc2626" }}>
-          ⚠ Run preprocessing first.
-        </p>
+        <h1>{tr("clustering.title")}</h1>
+        <div style={{ padding: 16, background: "#fef3c7", borderRadius: 6, border: "1px solid #f59e0b", color: "#92400e" }}>
+          ⚠ Selesaikan tahap <strong>Preprocessing</strong> terlebih dahulu sebelum melakukan Clustering.{" "}
+          <a href="/preprocessing" style={{ color: "#92400e", fontWeight: 600 }}>Buka Preprocessing →</a>
+        </div>
+      </div>
+    );
+  }
+
+  if (problemType && !isUnsupervised) {
+    return (
+      <div>
+        <h1>{tr("clustering.title")}</h1>
+        <div style={{ padding: 16, background: "#fef3c7", borderRadius: 6, border: "1px solid #f59e0b", color: "#92400e" }}>
+          ⚠ Halaman ini untuk <strong>Unsupervised Learning (Clustering)</strong>.<br />
+          Mode aktif saat ini: <strong>{problemType}</strong> — pilih tipe masalah <em>Clustering</em> di halaman{" "}
+          <a href="/preprocessing" style={{ color: "#92400e", fontWeight: 600 }}>Preprocessing →</a>{" "}
+          untuk mengaktifkan analisis ini.
+        </div>
       </div>
     );
   }
@@ -82,9 +99,9 @@ export default function ClusteringPage() {
 
   return (
     <div>
-      <h1>{tr("clustering.title") || "Clustering Analysis"}</h1>
+      <h1>{tr("clustering.title")}</h1>
       <p style={{ color: "#64748b" }}>
-        Unsupervised learning for pattern discovery
+        Temukan pola tersembunyi dalam data melalui analisis klasterisasi.
       </p>
 
       <div
@@ -97,7 +114,7 @@ export default function ClusteringPage() {
         }}
       >
         <label>
-          Clustering Method
+          Metode Clustering
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value)}
@@ -113,7 +130,7 @@ export default function ClusteringPage() {
 
         {(method === "kmeans" || method === "hierarchical" || method === "spectral") && (
           <label>
-            Number of Clusters
+          Jumlah Klaster (k)
             <input
               type="number"
               min="2"
@@ -172,7 +189,7 @@ export default function ClusteringPage() {
             borderRadius: 6,
           }}
         >
-          {busy ? "Running..." : "Run Clustering"}
+          {busy ? "Menjalankan..." : "🔬 Jalankan Clustering"}
         </button>
 
         {(method === "kmeans" || method === "hierarchical") && (
@@ -187,7 +204,7 @@ export default function ClusteringPage() {
               borderRadius: 6,
             }}
           >
-            {busy ? "Analyzing..." : "Find Optimal K"}
+            {busy ? "Menganalisis..." : "📊 Cari K Optimal"}
           </button>
         )}
       </div>
@@ -248,12 +265,12 @@ export default function ClusteringPage() {
             color: "#166534",
           }}
         >
-          <h3>Clustering Results</h3>
-          <p>Method: {result.method}</p>
-          <p>Number of Clusters: {result.metrics.n_clusters}</p>
+          <h3>✅ Hasil Clustering</h3>
+          <p>Metode: <strong>{result.method}</strong></p>
+          <p>Jumlah Klaster: <strong>{result.metrics.n_clusters}</strong></p>
           <p>
             Silhouette Score:{" "}
-            {result.metrics.silhouette_score?.toFixed(3)}
+            <strong>{result.metrics.silhouette_score?.toFixed(3)}</strong>
           </p>
           <p>
             Calinski-Harabasz Score:{" "}
@@ -264,22 +281,33 @@ export default function ClusteringPage() {
             {result.metrics.davies_bouldin_score?.toFixed(3)}
           </p>
           {result.metrics.n_noise > 0 && (
-            <p>Noise Points: {result.metrics.n_noise}</p>
+            <p>Noise Points (DBSCAN): {result.metrics.n_noise}</p>
           )}
           {result.metrics.cluster_sizes && (
             <div style={{ marginTop: 12 }}>
-              <h4>Cluster Sizes:</h4>
+              <h4>Ukuran Klaster:</h4>
               <ul>
                 {Object.entries(result.metrics.cluster_sizes).map(
                   ([cluster, size]) => (
                     <li key={cluster}>
-                      Cluster {cluster}: {size} samples
+                      Klaster {cluster}: {size} sampel
                     </li>
                   )
                 )}
               </ul>
             </div>
           )}
+
+          <div style={{ marginTop: 16, padding: 12, background: "#eff6ff", borderRadius: 6, border: "1px solid #bfdbfe" }}>
+            <p style={{ margin: 0, color: "#1d4ed8", fontWeight: 600 }}>
+              🎉 Clustering selesai!
+            </p>
+            <p style={{ margin: "6px 0 0", color: "#1d4ed8" }}>
+              Lanjut ke{" "}
+              <a href="/interpretation" style={{ color: "#1d4ed8", fontWeight: 600 }}>Interpretasi Model →</a>{" "}
+              atau unduh hasil cluster.
+            </p>
+          </div>
         </div>
       )}
     </div>

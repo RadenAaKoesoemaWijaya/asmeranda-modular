@@ -16,6 +16,7 @@ export default function PreprocessingPage() {
 
   const [targetColumn, setTargetColumn] = useState("");
   const [problemType, setProblemType] = useState("Classification");
+  const isUnsupervised = problemType === "Clustering" || problemType === "Unsupervised";
   const [scalingMethod, setScalingMethod] = useState("auto");
   const [imputationStrategy, setImputationStrategy] = useState("mean");
   const [applyEncoding, setApplyEncoding] = useState(true);
@@ -37,10 +38,14 @@ export default function PreprocessingPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!targetColumn && allColumns.length > 0) {
+    if (!isUnsupervised && !targetColumn && allColumns.length > 0) {
       setTargetColumn(allColumns[allColumns.length - 1]);
     }
-  }, [allColumns, targetColumn]);
+    // Clear target when switching to unsupervised
+    if (isUnsupervised && targetColumn) {
+      setTargetColumn("");
+    }
+  }, [allColumns, isUnsupervised]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!datasetId) {
     return (
@@ -52,8 +57,8 @@ export default function PreprocessingPage() {
   }
 
   async function run() {
-    if (!targetColumn) {
-      setError("Pilih kolom target dulu");
+    if (!isUnsupervised && !targetColumn) {
+      setError("Pilih kolom target dulu (atau pilih Clustering untuk Unsupervised Learning)");
       return;
     }
     setBusy(true);
@@ -62,7 +67,7 @@ export default function PreprocessingPage() {
     try {
       const r = await api.runPreprocessing({
         dataset_id: datasetId,
-        target_column: targetColumn,
+        target_column: isUnsupervised ? null : (targetColumn || null),
         problem_type: problemType,
         scaling_method: scalingMethod,
         imputation_strategy: imputationStrategy,
@@ -74,7 +79,7 @@ export default function PreprocessingPage() {
           max_features: Number(maxFeatures),
           threshold: Number(selectionThreshold),
         } : null,
-        imbalance_handling: showImbalanceHandling ? {
+        imbalance_handling: (!isUnsupervised && showImbalanceHandling) ? {
           method: imbalanceMethod,
           sampling_strategy: samplingStrategy,
         } : null,
@@ -113,22 +118,6 @@ export default function PreprocessingPage() {
         }}
       >
         <label>
-          {tr("preprocessing.target")}
-          <select
-            value={targetColumn}
-            onChange={(e) => setTargetColumn(e.target.value)}
-            style={{ width: "100%" }}
-          >
-            <option value="">-- pilih --</option>
-            {allColumns.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
           {tr("preprocessing.problem")}
           <select
             value={problemType}
@@ -141,9 +130,30 @@ export default function PreprocessingPage() {
             <option value="Regression">
               {tr("preprocessing.problem.regression")}
             </option>
+            <option value="Clustering">
+              {tr("preprocessing.problem.clustering")}
+            </option>
             <option value="Forecasting">
               {tr("preprocessing.problem.forecasting")}
             </option>
+          </select>
+        </label>
+
+        <label style={{ opacity: isUnsupervised ? 0.45 : 1 }}>
+          {tr("preprocessing.target")}{" "}
+          {isUnsupervised && <em style={{ fontSize: 11, color: "#64748b" }}>(tidak diperlukan untuk Clustering)</em>}
+          <select
+            value={targetColumn}
+            onChange={(e) => setTargetColumn(e.target.value)}
+            disabled={isUnsupervised}
+            style={{ width: "100%" }}
+          >
+            <option value="">-- pilih --</option>
+            {allColumns.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -382,30 +392,47 @@ export default function PreprocessingPage() {
           }}
         >
           <h3>✓ {tr("common.success")}</h3>
-          <p>Train: {result.n_samples_train} | Test: {result.n_samples_test} | Features: {result.n_features}</p>
+          <p>Data Training: {result.n_samples_train} | Data Test: {result.n_samples_test} | Fitur: {result.n_features}</p>
           <p>Steps: {result.preprocessing_steps.join(" → ")}</p>
-          
+
           {result.feature_selection_info && result.feature_selection_info.method !== "none" && (
             <div style={{ marginTop: 8, padding: 8, background: "#f0fdf4", borderRadius: 4 }}>
               <strong>Feature Selection:</strong> {result.feature_selection_info.method}
               {result.feature_selection_info.selected_features && (
-                <span> ({result.feature_selection_info.selected_features.length} features selected)</span>
+                <span> ({result.feature_selection_info.selected_features.length} fitur terpilih)</span>
               )}
             </div>
           )}
-          
+
           {result.imbalance_handling_info && result.imbalance_handling_info.method !== "none" && (
             <div style={{ marginTop: 8, padding: 8, background: "#f0fdf4", borderRadius: 4 }}>
               <strong>Imbalance Handling:</strong> {result.imbalance_handling_info.method}
               {result.imbalance_handling_info.original_shape && (
-                <span> (Samples: {result.imbalance_handling_info.original_shape[0]} → {result.imbalance_handling_info.resampled_shape[0]})</span>
+                <span> (Sampel: {result.imbalance_handling_info.original_shape[0]} → {result.imbalance_handling_info.resampled_shape[0]})</span>
               )}
             </div>
           )}
-          
-          <p>
-            Lanjut ke <strong>{tr("nav.training")}</strong>.
-          </p>
+
+          <div style={{ marginTop: 12, padding: 10, background: "#eff6ff", borderRadius: 6, border: "1px solid #bfdbfe" }}>
+            {isUnsupervised ? (
+              <p style={{ margin: 0, color: "#1d4ed8" }}>
+                🎯 Mode <strong>Unsupervised Learning</strong> — Lanjut ke{" "}
+                <a href="/clustering" style={{ color: "#1d4ed8", fontWeight: 600 }}>Clustering Analysis</a>.
+              </p>
+            ) : problemType === "Forecasting" ? (
+              <p style={{ margin: 0, color: "#1d4ed8" }}>
+                📈 Mode <strong>Forecasting</strong> — Lanjut ke{" "}
+                <a href="/timeseries" style={{ color: "#1d4ed8", fontWeight: 600 }}>Time Series</a>.
+              </p>
+            ) : (
+              <p style={{ margin: 0, color: "#1d4ed8" }}>
+                🧠 Mode <strong>Supervised Learning</strong> — Lanjut ke{" "}
+                <a href="/optimization" style={{ color: "#1d4ed8", fontWeight: 600 }}>Optimasi Hyperparameter</a>{" "}
+                (opsional) atau langsung ke{" "}
+                <a href="/training" style={{ color: "#1d4ed8", fontWeight: 600 }}>Pelatihan Model</a>.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

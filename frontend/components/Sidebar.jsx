@@ -24,11 +24,41 @@ const STEPS = [
     can: "preprocessing",
     icon: "⚙️",
   },
-  { href: "/clustering", key: "nav.clustering", can: "preprocessing", icon: "🎯" },
-  { href: "/training", key: "nav.training", can: "training", icon: "🧠" },
-  { href: "/optimization", key: "nav.optimization", can: "training", icon: "🔧" },
-  { href: "/shap", key: "nav.shap", can: "shap", icon: "📊" },
-  { href: "/lime", key: "nav.lime", can: "shap", icon: "🔬" },
+  {
+    href: "/optimization",
+    key: "nav.optimization",
+    can: "optimization",
+    icon: "🔧",
+    paradigm: "supervised",
+  },
+  {
+    href: "/training",
+    key: "nav.training",
+    can: "training",
+    icon: "🧠",
+    paradigm: "supervised",
+  },
+  {
+    href: "/shap",
+    key: "nav.shap",
+    can: "shap",
+    icon: "📊",
+    paradigm: "supervised",
+  },
+  {
+    href: "/lime",
+    key: "nav.lime",
+    can: "lime",
+    icon: "🔬",
+    paradigm: "supervised",
+  },
+  {
+    href: "/clustering",
+    key: "nav.clustering",
+    can: "clustering",
+    icon: "🎯",
+    paradigm: "unsupervised",
+  },
   {
     href: "/timeseries",
     key: "nav.timeseries",
@@ -38,7 +68,7 @@ const STEPS = [
   {
     href: "/advanced-ml",
     key: "nav.advanced_ml",
-    can: "preprocessing",
+    can: "advanced_ml",
     icon: "🚀",
   },
 ];
@@ -47,9 +77,41 @@ export default function Sidebar() {
   const pathname = usePathname();
   const lang = useWorkflow((s) => s.language) || "id";
   const canProceedTo = useWorkflow((s) => s.canProceedTo);
+  const problemType = useWorkflow((s) => s.problemType);
+  const stateId = useWorkflow((s) => s.stateId);
+  const modelId = useWorkflow((s) => s.modelId);
   const setLang = useWorkflow((s) => s.set);
   const datasetId = useWorkflow((s) => s.datasetId);
   const tr = useT(lang);
+
+  const getStepTooltip = (step, enabled) => {
+    if (enabled) return "";
+    if (!datasetId) return "Unggah dataset terlebih dahulu";
+    if (
+      !stateId &&
+      step.href !== "/eda" &&
+      step.href !== "/preprocessing" &&
+      step.href !== "/timeseries"
+    ) {
+      return "Selesaikan tahap Preprocessing terlebih dahulu";
+    }
+    if (
+      step.paradigm === "supervised" &&
+      (problemType === "Clustering" || problemType === "Unsupervised")
+    ) {
+      return "Modul ini hanya untuk Supervised Learning (Klasifikasi / Regresi)";
+    }
+    if (
+      step.paradigm === "unsupervised" &&
+      (problemType === "Classification" || problemType === "Regression")
+    ) {
+      return "Modul Clustering hanya untuk Unsupervised Learning";
+    }
+    if ((step.href === "/shap" || step.href === "/lime") && !modelId) {
+      return "Latih model terlebih dahulu di Pelatihan Model";
+    }
+    return "Selesaikan langkah sebelumnya terlebih dahulu";
+  };
 
   // Hitung progress berapa langkah sudah selesai
   const completedSteps = STEPS.filter((s) => !s.alwaysEnabled && canProceedTo(s.can)).length;
@@ -99,6 +161,7 @@ export default function Sidebar() {
           const enabled = step.alwaysEnabled || canProceedTo(step.can);
           const active = pathname === step.href;
           const done = !step.alwaysEnabled && canProceedTo(step.can);
+          const tooltip = getStepTooltip(step, enabled);
 
           return (
             <Link
@@ -112,9 +175,7 @@ export default function Sidebar() {
                 .filter(Boolean)
                 .join(" ")}
               onClick={(e) => !enabled && e.preventDefault()}
-              title={
-                !enabled ? "Selesaikan langkah sebelumnya terlebih dahulu" : ""
-              }
+              title={tooltip}
             >
               <span className="sidebar-link-icon">{step.icon}</span>
               <span>

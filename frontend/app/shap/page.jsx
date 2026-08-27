@@ -20,7 +20,20 @@ export default function ShapPage() {
     return (
       <div>
         <h1>{tr("shap.title")}</h1>
-        <p style={{ color: "#dc2626" }}>⚠ Latih model dulu.</p>
+        <div
+          style={{
+            padding: 16,
+            background: "#fef3c7",
+            borderRadius: 6,
+            border: "1px solid #f59e0b",
+            color: "#92400e",
+          }}
+        >
+          ⚠ Belum ada model yang dilatih. Selesaikan tahap <strong>Pelatihan Model</strong> terlebih dahulu untuk melihat analisis SHAP.{" "}
+          <a href="/training" style={{ color: "#92400e", fontWeight: 600 }}>
+            Buka Pelatihan Model →
+          </a>
+        </div>
       </div>
     );
   }

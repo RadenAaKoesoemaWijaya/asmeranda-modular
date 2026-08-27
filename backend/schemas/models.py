@@ -74,7 +74,7 @@ class ImbalanceConfig(BaseModel):
 class PreprocessingConfig(BaseModel):
     dataset_id: str
     target_column: Optional[str] = None
-    problem_type: Optional[str] = Field(default=None, pattern="^(Classification|Regression|Forecasting)$")
+    problem_type: Optional[str] = Field(default=None, pattern="^(Classification|Regression|Forecasting|Clustering|Unsupervised|TimeSeries)$")
     numerical_features: Optional[List[str]] = None
     categorical_features: Optional[List[str]] = None
     scaling_method: str = "auto"  # auto|standard|minmax|robust|power|quantile
