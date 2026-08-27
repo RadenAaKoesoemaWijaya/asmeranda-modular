@@ -395,6 +395,83 @@ def get_metadata(model_id: str) -> Optional[Dict[str, Any]]:
     return _MODELS.get(model_id)
 
 
+def save_uploaded_model(file_bytes: bytes, original_filename: str = "uploaded_model.pkl") -> Dict[str, Any]:
+    """Parse and save an uploaded model (.pkl) to disk and memory registry."""
+    import io
+    from sklearn.base import is_classifier, is_regressor
+
+    try:
+        obj = pickle.loads(file_bytes)
+    except Exception as exc:
+        return {"success": False, "error": f"Format file .pkl tidak valid atau corrupt: {str(exc)}"}
+
+    model_id = f"custom_{uuid.uuid4().hex[:8]}"
+
+    if isinstance(obj, dict) and "model" in obj:
+        model = obj["model"]
+        feature_names = obj.get("feature_names") or []
+        problem_type = obj.get("problem_type")
+        model_type = obj.get("model_type") or type(model).__name__
+        metrics = obj.get("metrics")
+        cv_report = obj.get("cv_report")
+        feature_importances = obj.get("feature_importances")
+    else:
+        model = obj
+        model_type = type(model).__name__
+        if is_classifier(model) or hasattr(model, "predict_proba"):
+            problem_type = "Classification"
+        elif is_regressor(model):
+            problem_type = "Regression"
+        else:
+            problem_type = "Classification"
+        feature_names = getattr(model, "feature_names_in_", None)
+        if feature_names is not None:
+            feature_names = list(feature_names)
+        else:
+            feature_names = []
+        metrics = None
+        cv_report = None
+        feature_importances = None
+
+    # Persist in standard dictionary format
+    path = _MODEL_DIR / f"{model_id}.pkl"
+    payload = {
+        "model": model,
+        "model_type": model_type,
+        "problem_type": problem_type,
+        "feature_names": feature_names,
+        "metrics": metrics,
+        "cv_report": cv_report,
+        "feature_importances": feature_importances,
+        "original_filename": original_filename,
+    }
+    with open(path, "wb") as fh:
+        pickle.dump(payload, fh)
+
+    _MODELS[model_id] = {
+        "model_id": model_id,
+        "model_type": model_type,
+        "problem_type": problem_type,
+        "metrics": metrics,
+        "cv_report": cv_report,
+        "feature_importances": feature_importances,
+        "path": str(path),
+        "n_features": len(feature_names),
+        "feature_names": feature_names,
+        "original_filename": original_filename,
+    }
+
+    return {
+        "success": True,
+        "model_id": model_id,
+        "model_type": model_type,
+        "problem_type": problem_type,
+        "feature_names": feature_names,
+        "n_features": len(feature_names),
+        "message": f"Model '{model_type}' berhasil diimpor dengan ID {model_id}",
+    }
+
+
 def delete_model(model_id: str) -> bool:
     path = _MODEL_DIR / f"{model_id}.pkl"
     existed = False

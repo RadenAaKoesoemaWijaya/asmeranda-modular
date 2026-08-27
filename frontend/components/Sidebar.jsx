@@ -53,6 +53,13 @@ const STEPS = [
     paradigm: "supervised",
   },
   {
+    href: "/inference",
+    key: "nav.inference",
+    can: "inference",
+    icon: "🔮",
+    alwaysEnabled: true,
+  },
+  {
     href: "/clustering",
     key: "nav.clustering",
     can: "clustering",

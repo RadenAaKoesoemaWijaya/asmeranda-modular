@@ -677,6 +677,14 @@ export default function TrainingPage() {
             >
               🔬 Buka Interpretasi LIME →
             </a>
+
+            <a
+              href="/inference"
+              className="btn btn-primary"
+              style={{ background: "#7c3aed", borderColor: "#6d28d9" }}
+            >
+              🔮 Deteksi Data Baru (Inferensi) →
+            </a>
           </div>
         </div>
       )}

@@ -4,14 +4,16 @@ Endpoint /training - latih model dari state hasil preprocessing.
 from __future__ import annotations
 
 import asyncio
+import io
+import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 
 import pandas as pd
 
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, UploadFile, File
+from fastapi.responses import FileResponse, JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -334,6 +336,23 @@ def download_model(model_id: str):
     )
 
 
+@router.post("/models/upload")
+async def upload_model(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Upload dan daftarkan file model .pkl eksternal untuk deteksi/inferensi."""
+    if not file.filename.endswith(".pkl") and not file.filename.endswith(".pickle"):
+        raise HTTPException(status_code=400, detail="Format file harus berformat .pkl atau .pickle")
+    
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="File kosong")
+    
+    result = training_service.save_uploaded_model(content, original_filename=file.filename)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Gagal membaca model"))
+    
+    return result
+
+
 # TEMPORARY: Optimization endpoints added here for immediate functionality
 @router.post("/optimize", response_model=OptimizationResponse)
 def optimize_hyperparameters(
@@ -524,40 +543,122 @@ def predict_with_model(model_id: str, request: PredictionRequest):
     try:
         # Convert input data to DataFrame
         input_df = pd.DataFrame(request.data)
+        if input_df.empty:
+            raise HTTPException(status_code=400, detail="Data input kosong")
         
-        # Ensure all required features are present
-        missing_features = set(feature_names) - set(input_df.columns)
-        if missing_features:
-            # Add missing features with zeros
-            for feat in missing_features:
-                input_df[feat] = 0
-        
-        # Align columns
-        X_new = input_df[feature_names]
+        # If model has known feature_names, align
+        if feature_names:
+            missing_features = set(feature_names) - set(input_df.columns)
+            if missing_features:
+                for feat in missing_features:
+                    input_df[feat] = 0.0
+            X_new = input_df[feature_names]
+        else:
+            X_new = input_df
         
         # Convert to numeric
         X_new = X_new.apply(pd.to_numeric, errors="coerce").fillna(0.0)
         
         # Make predictions
-        predictions = model.predict(X_new)
+        preds = model.predict(X_new)
+        # Convert numpy types to native Python
+        if hasattr(preds, "tolist"):
+            predictions = preds.tolist()
+        else:
+            predictions = [float(p) if isinstance(p, (int, float, np.number)) else str(p) for p in preds]
         
         # Get probabilities if available
         probabilities = None
         if problem_type == "Classification" and hasattr(model, "predict_proba"):
             try:
-                probabilities = model.predict_proba(X_new).tolist()
+                probs = model.predict_proba(X_new)
+                probabilities = probs.tolist() if hasattr(probs, "tolist") else [list(row) for row in probs]
             except Exception:
                 pass
         
         return PredictionResponse(
             success=True,
-            predictions=predictions.tolist(),
+            predictions=predictions,
             probabilities=probabilities
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Prediction error for model {model_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
+
+@router.post("/models/{model_id}/predict-file")
+async def predict_with_file(model_id: str, file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Prediksi batch langsung dengan mengunggah file CSV atau Excel data baru."""
+    model_data = training_service.load_model(model_id)
+    if model_data is None:
+        raise HTTPException(status_code=404, detail="Model tidak ditemukan")
+    
+    model = model_data["model"]
+    feature_names = model_data.get("feature_names", [])
+    problem_type = model_data.get("problem_type", "Classification")
+    
+    try:
+        content = await file.read()
+        filename = file.filename.lower()
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+            df = pd.read_excel(io.BytesIO(content))
+        elif filename.endswith(".json"):
+            df = pd.read_json(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Format file harus CSV, Excel, atau JSON")
+        
+        if df.empty:
+            raise HTTPException(status_code=400, detail="File yang diunggah tidak memiliki baris data")
+        
+        # Align features
+        if feature_names:
+            missing_features = set(feature_names) - set(df.columns)
+            for feat in missing_features:
+                df[feat] = 0.0
+            X_new = df[feature_names].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        else:
+            X_new = df.select_dtypes(include=[np.number]).fillna(0.0)
+        
+        preds = model.predict(X_new)
+        pred_list = preds.tolist() if hasattr(preds, "tolist") else list(preds)
+        
+        df_result = df.copy()
+        df_result["Prediction"] = pred_list
+        
+        confidence_list = []
+        if problem_type == "Classification" and hasattr(model, "predict_proba"):
+            try:
+                probs = model.predict_proba(X_new)
+                max_probs = np.max(probs, axis=1)
+                confidence_list = max_probs.tolist()
+                df_result["Confidence"] = [f"{p * 100:.2f}%" for p in max_probs]
+            except Exception:
+                pass
+        
+        # Convert result sample to records for UI table preview
+        preview_rows = df_result.head(100).to_dict(orient="records")
+        
+        return {
+            "success": True,
+            "model_id": model_id,
+            "total_rows": int(len(df_result)),
+            "columns": list(df_result.columns),
+            "preview": preview_rows,
+            "predictions": pred_list,
+            "confidence": confidence_list,
+            "problem_type": problem_type,
+            "message": f"Berhasil mendeteksi/memprediksi {len(df_result)} baris data baru",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Batch file prediction error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Gagal memprediksi file: {str(e)}")
 
 
 @router.post("/evaluate")

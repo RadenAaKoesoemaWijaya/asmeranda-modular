@@ -60,11 +60,13 @@ class WorkflowValidator:
         elif step_name == "eda_to_preprocessing":
             if not self.state.get("dataset_id"):
                 errors.append("Dataset belum dipilih.")
+            if not self.state.get("target_column") and problem_type not in ("Clustering", "Unsupervised"):
+                errors.append("Kolom target belum ditentukan.")
 
         elif step_name == "preprocessing_to_optimization":
             if not self.state.get("dataset_id"):
                 errors.append("Dataset belum dipilih.")
-            if not self.state.get("state_id"):
+            if not self.state.get("state_id") and self.state.get("n_samples_train") is None:
                 errors.append("Tahap preprocessing belum selesai.")
             if problem_type in ("Clustering", "Unsupervised"):
                 errors.append("Optimasi hyperparameter hanya tersedia untuk Supervised Learning (Klasifikasi / Regresi).")
@@ -74,14 +76,12 @@ class WorkflowValidator:
         elif step_name == "preprocessing_to_training":
             if not self.state.get("dataset_id"):
                 errors.append("Dataset belum dipilih.")
-            if not self.state.get("state_id"):
+            if not self.state.get("state_id") and self.state.get("n_samples_train") is None:
                 errors.append("Tahap preprocessing belum selesai.")
             if problem_type in ("Clustering", "Unsupervised"):
                 errors.append("Pelatihan model terarah hanya untuk Supervised Learning. Gunakan menu Clustering untuk Unsupervised.")
             elif not self.state.get("target_column") and problem_type in ("Classification", "Regression"):
                 errors.append("Kolom target belum ditentukan.")
-            if self.state.get("n_samples_train") is None:
-                errors.append("Data training belum siap.")
 
         elif step_name in ("training_to_evaluation", "training_to_xai"):
             if not self.state.get("model_id"):

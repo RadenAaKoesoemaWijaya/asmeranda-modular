@@ -263,6 +263,16 @@ export const api = {
       method: "POST", 
       body: JSON.stringify({ data }) 
     }),
+  predictWithFile: (id, file, onProgress) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiUpload(`/training/models/${id}/predict-file`, fd, onProgress);
+  },
+  uploadModel: (file, onProgress) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiUpload("/training/models/upload", fd, onProgress);
+  },
   downloadModel: (id) => {
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
     window.open(`${API_BASE}/training/models/${id}/download`, '_blank');
