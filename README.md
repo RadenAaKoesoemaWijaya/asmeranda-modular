@@ -78,104 +78,92 @@ graph TD
 | **Keamanan & Auth** | PyJWT, Bcrypt, Cryptography, Passlib |
 | **Frontend** | Next.js 14 (App Router), React 18, Zustand, Custom CSS |
 | **Infra & Container** | Docker, Docker Compose, Nginx (Alpine), Multi-stage build |
-| **Cloud Target** | Azure Container Apps, AWS, GCP |
+| **Cloud Target** | Azure Con## 📦 3 Pilihan Metode Deployment Resmi
+
+Asmeranda AI didesain untuk berjalan secara optimal, aman, dan mandiri (*self-hosted / on-premise*) melalui **3 opsi deployment**:
+
+```mermaid
+graph TD
+    A[Asmeranda AI Deployment] --> B[Opsi 1: Docker Container / Docker Desktop]
+    A --> C[Opsi 2: Localhost Direct Run]
+    A --> D[Opsi 3: Windows Installer & Portable Package]
+```
 
 ---
 
-## 📦 Panduan Instalasi & Menjalankan
+### 🐳 Opsi 1: Docker Container / Docker Desktop (Multi-Container)
 
-### Prasyarat Sistem
-- **Python 3.11+**
-- **Node.js 18+** dan `npm`
-- **Docker Desktop** (dengan backend WSL2 aktif di Windows)
+Semua service (Backend FastAPI, Frontend Next.js, dan Nginx Reverse Proxy) telah dikemas dalam kontainer Docker terisolasi dengan healthcheck otomatis.
 
----
+#### 1. Jalankan via Script 1-Klik (Windows):
+- **Start**: Dobel klik file [`start_docker.bat`](file:///c:/asmeranda-modular/start_docker.bat) atau jalankan [`deploy-docker-desktop.ps1`](file:///c:/asmeranda-modular/deploy-docker-desktop.ps1).
+- **Stop**: Dobel klik file [`stop_docker.bat`](file:///c:/asmeranda-modular/stop_docker.bat).
 
-### Opsi 1: Menjalankan dengan Docker Compose (Direkomendasikan)
-
-Semua service (Backend, Frontend, dan Nginx Reverse Proxy) telah dikonfigurasi secara optimal dan terintegrasi dengan healthcheck otomatis.
-
-#### 1. Jalankan Seluruh Stack
+#### 2. Jalankan Manual via Terminal:
 ```bash
-# Build dan jalankan semua container di latar belakang
+# Build dan jalankan seluruh kontainer di latar belakang
 docker compose up --build -d
-```
 
-#### 2. Periksa Status Kontainer
-```bash
-# Pastikan container backend berstatus "healthy" dan semua container "Up"
+# Periksa status kontainer
 docker compose ps
-```
 
-#### 3. Akses Layanan Melalui Docker
-- **Aplikasi Web (via Nginx)**: [http://localhost](http://localhost) (Port 80)
-- **Aplikasi Web Langsung (Frontend)**: [http://localhost:3000](http://localhost:3000)
-- **API Backend Langsung**: [http://localhost:8000](http://localhost:8000)
-- **Dokumentasi Swagger API**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Health Check Endpoint**: [http://localhost:8000/health](http://localhost:8000/health)
-
-#### 4. Perintah Operasional Docker
-```bash
-# Melihat log real-time
+# Memantau log real-time
 docker compose logs -f
 
-# Melihat log backend saja
-docker compose logs -f backend
-
-# Melihat log frontend saja
-docker compose logs -f frontend
-
-# Update/rebuild satu service tertentu
-docker compose up --build -d backend
-docker compose up --build -d frontend
-
-# Menghentikan seluruh container
+# Menghentikan layanan
 docker compose down
 ```
 
+#### 3. Akses Layanan:
+- **Aplikasi Web (via Nginx)**: [http://localhost](http://localhost) (Port 80)
+- **Frontend UI Langsung**: [http://localhost:3000](http://localhost:3000)
+- **Backend API**: [http://localhost:8000](http://localhost:8000)
+- **Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+
 ---
 
-### Opsi 2: Menjalankan Secara Lokal (Development)
+### 💻 Opsi 2: Localhost Development / Run (Native Python + Node.js)
 
-#### 1. Setup Backend FastAPI
+Cocok untuk pengembangan lokal (*local development*), testing fitur baru, atau debugging langsung.
 
+#### 1. Jalankan via Script 1-Klik (Windows):
+- Dobel klik file [`run_local.bat`](file:///c:/asmeranda-modular/run_local.bat) atau jalankan [`run_local.ps1`](file:///c:/asmeranda-modular/run_local.ps1) di PowerShell.
+- Skrip ini otomatis memeriksa Python, membuat virtual environment `.venv`, menginstal dependensi, dan menjalankan Backend & Frontend secara bersamaan.
+
+#### 2. Jalankan di Linux / macOS / WSL:
 ```bash
-# Masuk ke root direktori
-cd asmeranda-modular
-
-# Buat virtual environment
-python -m venv .venv
-
-# Aktivasi virtual environment
-# Windows (PowerShell):
-.\.venv\Scripts\Activate.ps1
-# Windows (CMD):
-# .\.venv\Scripts\activate.bat
-# Linux/macOS:
-# source .venv/bin/activate
-
-# Install dependensi backend
-pip install -r backend/requirements-backend.txt
-
-# Buat file konfigurasi .env dari contoh
-cp .env.example .env
-
-# Jalankan server FastAPI dengan auto-reload
-python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+chmod +x deploy-local.sh
+./deploy-local.sh
 ```
 
-#### 2. Setup Frontend Next.js
-
+#### 3. Jalankan Manual:
 ```bash
-# Buka terminal baru, masuk ke direktori frontend
+# Terminal 1 - Backend FastAPI
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r backend/requirements-backend.txt
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2 - Frontend Next.js
 cd frontend
-
-# Install paket Node.js
 npm install
-
-# Jalankan development server Next.js
 npm run dev
 ```
+
+---
+
+### 🪟 Opsi 3: Windows Installer & Portable Package
+
+Menyediakan paket instalasi mandiri untuk pengguna sistem operasi Windows tanpa perlu setup manual.
+
+#### 1. Menyusun Installer (.exe) & Portable (.zip):
+- Jalankan [`build_installer.bat`](file:///c:/asmeranda-modular/build_installer.bat).
+- Skrip akan otomatis mengompilasi [`asmeranda.iss`](file:///c:/asmeranda-modular/asmeranda.iss) menggunakan Inno Setup Compiler menjadi installer `AsmerandaAI_Setup_v2.0.0.exe` serta membuat paket `AsmerandaAI-Portable-v2.0.0.zip` di folder `InstallerOutput\`.
+
+#### 2. Menginstal di Komputer Klien Windows:
+1. Jalankan `AsmerandaAI_Setup_v2.0.0.exe` sebagai Administrator.
+2. Ikuti wizard instalasi standar hingga selesai.
+3. Pintasan (*shortcut*) otomatis tersedia di Desktop dan Start Menu untuk menjalankan aplikasi.
 
 ---
 
@@ -184,9 +172,6 @@ npm run dev
 | Akun | Username | Password Default | Role |
 |---|---|---|---|
 | **Administrator** | `admin` | `Admin@Asmeranda2026!` | `admin` |
-
-> [!TIP]
-> Demi keamanan, segera ganti password administrator melalui antarmuka pengguna atau file konfigurasi saat melakukan deployment produksi.
 
 ---
 
@@ -197,89 +182,73 @@ npm run dev
 | `/health` | `GET` | Cek status kesehatan sistem & versi runtime |
 | `/docs` | `GET` | Dokumentasi interaktif Swagger UI |
 | `/api/v1/auth/login` | `POST` | Login autentikasi & penerbitan token JWT |
-| `/api/v1/auth/register` | `POST` | Registrasi pengguna baru |
-| `/api/v1/auth/me` | `GET` | Informasi profil pengguna aktif |
-| `/api/v1/datasets/upload` | `POST` | Upload dataset (CSV, XLSX, Parquet, JSON) |
-| `/api/v1/datasets/list` | `GET` | Daftar semua dataset yang tersimpan |
-| `/api/v1/datasets/{id}/preview` | `GET` | Preview data tabular dengan paginasi |
-| `/api/v1/eda/summary` | `POST` | Statistik deskriptif & analisis missing values |
-| `/api/v1/preprocessing/run` | `POST` | Eksekusi pipeline preprocessing & train-test split |
-| `/api/v1/preprocessing/cluster` | `POST` | Analisis clustering unsupervised |
-| `/api/v1/training/start` | `POST` | Memulai training model ML secara asinkron |
-| `/api/v1/training/models` | `GET` | Daftar model yang telah selesai dilatih beserta metriknya |
-| `/api/v1/optimization/hyperparameters` | `POST` | Hyperparameter tuning dengan Optuna Bayesian search |
+| `/api/v1/datasets` | `POST` | Upload dataset (CSV, XLSX, Parquet, JSON) |
+| `/api/v1/datasets` | `GET` | Daftar semua dataset yang tersimpan |
+| `/api/v1/eda/{id}/summary` | `GET` | Statistik deskriptif & analisis missing values |
+| `/api/v1/preprocessing/run` | `POST` | Eksekusi pipeline preprocessing & feature engineering |
+| `/api/v1/clustering/cluster` | `POST` | Analisis clustering unsupervised |
+| `/api/v1/clustering/optimal-k`| `POST` | Analisis Elbow & Silhouette Score |
+| `/api/v1/optimization/optimize` | `POST` | Hyperparameter tuning dengan Optuna Bayesian search |
+| `/api/v1/training/start` | `POST` | Memulai training model ML secara terarah |
+| `/api/v1/training/evaluate`| `POST` | Evaluasi model komprehensif |
 | `/api/v1/interpretation/shap` | `POST` | Kalkulasi global & local feature importance (SHAP) |
 | `/api/v1/interpretation/lime` | `POST` | Penjelasan lokal prediksi per data (LIME) |
-| `/api/v1/timeseries/forecast` | `POST` | Pelatihan model forecasting deret waktu |
-| `/api/v1/advanced-ml/umap` | `POST` | Reduksi dimensi data kompleks via UMAP |
+| `/api/v1/timeseries/{id}/forecast` | `GET` | Pelatihan model forecasting deret waktu |
 
 ---
 
 ## 🧪 Testing & Verifikasi Kualitas
 
 ```bash
-# Menjalankan unit tests
-pytest backend/tests/unit/ -v
+# Menjalankan unit tests validator workflow
+python -c "from workflow_validator import WorkflowValidator; print(WorkflowValidator({'dataset_id': 'd1'}).validate('upload_to_eda'))"
 
-# Menjalankan test modul keamanan (RBAC, Auth, Rate Limiter)
-pytest backend/tests/security/ -v
-
-# Menjalankan pengujian integrasi
-pytest backend/tests/integration/ -v
-
-# Verifikasi deployment lokal & dependensi end-to-end
-python final_verification.py
+# Menjalankan build verifikasi frontend
+cd frontend && npm run build
 ```
 
 ---
 
-## 📁 Struktur Direktori
+## 📁 Struktur Direktori Bersih
 
 ```text
 asmeranda-modular/
 ├── backend/                  # Source code Backend (FastAPI)
 │   ├── api/v1/               # Endpoint REST API v1
 │   ├── core/                 # Auth, Security, Config, State Management
-│   ├── models/               # Domain & database models
-│   ├── schemas/              # Pydantic schemas (request/response)
 │   ├── services/             # Core ML, EDA, XAI, Preprocessing services
-│   ├── tests/                # Test suite (unit, integration, security)
+│   ├── schemas/              # Pydantic schemas (request/response)
 │   ├── Dockerfile            # Container definition untuk backend
-│   ├── main.py               # FastAPI entrypoint
-│   └── requirements-backend.txt # Runtime dependencies
+│   └── requirements-backend.txt # Backend runtime dependencies
 ├── frontend/                 # Source code Frontend (Next.js 14 App Router)
-│   ├── src/app/              # Next.js pages & routes
-│   ├── src/components/       # UI Components
+│   ├── app/                  # Next.js pages & routes
+│   ├── components/           # UI Components (Sidebar, Navbar, dll)
+│   ├── lib/                  # Store (Zustand), API client, i18n
 │   ├── Dockerfile            # Container definition untuk frontend
 │   └── package.json          # Node dependencies & scripts
 ├── nginx/                    # Konfigurasi reverse proxy Nginx
-│   └── nginx.conf            # Nginx routing configuration
-├── data/                     # Volume penyimpanan dataset lokal
-├── docker-compose.yml        # Multi-container orchestration
-├── .env.example              # Template konfigurasi environment
-├── final_verification.py     # Script verifikasi deployment end-to-end
+├── data/                     # Direktori penyimpanan dataset & model
+├── docker-compose.yml        # Multi-container orchestration (Opsi 1)
+├── start_docker.bat          # 1-klik start Docker Desktop (Opsi 1)
+├── stop_docker.bat           # 1-klik stop Docker Desktop (Opsi 1)
+├── deploy-docker-desktop.ps1 # PowerShell launcher Docker Desktop (Opsi 1)
+├── run_local.bat             # 1-klik start Localhost Windows CMD (Opsi 2)
+├── run_local.ps1             # 1-klik start Localhost PowerShell (Opsi 2)
+├── deploy-local.sh           # Shell script start Localhost Unix (Opsi 2)
+├── asmeranda.iss             # Inno Setup Windows installer script (Opsi 3)
+├── build_installer.bat       # Builder Windows installer & ZIP (Opsi 3)
+├── workflow_validator.py     # Validator alur transisi state ML
 └── README.md                 # Dokumentasi proyek
 ```
 
 ---
 
-## ☁️ Deployment ke Cloud
-
-| Platform | Script / File Deployment |
-|---|---|
-| **Azure Container Apps** | `deploy-to-azure.bat` (Windows) / `./deploy-to-azure.sh` (Linux) |
-| **AWS ECS / EKS** | `./deploy-cloud-aws.sh` |
-| **Google Cloud Run / GKE**| `./deploy-cloud-gcp.sh` |
-| **Docker Desktop** | `./deploy-docker-desktop.ps1` |
-
----
-
-## 📝 Lisensi & Kontak
+## 📝 Lisensi & Hak Cipta
 
 Perangkat lunak proprietary milik **PT. Asmer Sahabat Sukses**.
 
-- **Email Support**: support@asmeranda.ai
-- **Dokumentasi Interaktif**: Akses `/docs` setelah server berjalan
+- **Email**: support@asmeranda.ai
+- **Dokumentasi Interaktif**: Akses `http://localhost:8000/docs` setelah server berjalan
 
 ---
 

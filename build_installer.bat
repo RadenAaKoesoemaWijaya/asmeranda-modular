@@ -1,47 +1,53 @@
 @echo off
-echo ====================================================
-echo Membangun Executable Asmeranda AI dengan PyInstaller
-echo ====================================================
+setlocal EnableDelayedExpansion
+
+echo ===========================================================================
+echo  Asmeranda AI - Windows Installer & Portable Package Builder
+echo ===========================================================================
 echo.
 
-REM Cek apakah ada Virtual Environment
-if exist "venv\Scripts\activate.bat" (
-    echo Mengaktifkan Virtual Environment (venv)...
-    call venv\Scripts\activate.bat
+set OUTPUT_DIR=InstallerOutput
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
+
+REM 1. Cek Inno Setup Compiler (ISCC.exe)
+set ISCC_PATH=""
+if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
+    set ISCC_PATH="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+) else if exist "C:\Program Files\Inno Setup 6\ISCC.exe" (
+    set ISCC_PATH="C:\Program Files\Inno Setup 6\ISCC.exe"
 ) else (
-    echo [PERINGATAN] Virtual Environment tidak ditemukan. 
-    echo Skrip akan menggunakan Python global. Disarankan untuk mengikuti Opsi 1 (Instalasi via Python) terlebih dahulu untuk membuat venv.
-    echo.
+    where iscc >nul 2>&1
+    if not errorlevel 1 set ISCC_PATH="iscc"
 )
 
-REM Memastikan pyinstaller terinstall menggunakan python module untuk mencegah isu path
-python -m pip install pyinstaller
+if not %ISCC_PATH%=="" (
+    echo [1/2] Menyusun Inno Setup Installer (.exe)...
+    %ISCC_PATH% asmeranda.iss
+    if not errorlevel 1 (
+        echo.
+        echo ✓ Installer .exe berhasil dibuat di folder: %OUTPUT_DIR%\
+    ) else (
+        echo [PERINGATAN] Kompilasi Inno Setup gagal.
+    )
+) else (
+    echo [INFO] Inno Setup Compiler (ISCC.exe) tidak ditemukan di sistem.
+    echo Anda dapat mengunduh Inno Setup dari https://jrsoftware.org/isdl.php
+)
 
-REM Membersihkan build sebelumnya jika ada
-if exist build rmdir /s /q build
-if exist dist rmdir /s /q dist
+REM 2. Buat Portable ZIP Bundle
+echo.
+echo [2/2] Membuat Portable ZIP Package...
+set ZIP_NAME=AsmerandaAI-Portable-v2.0.0.zip
+powershell -NoProfile -Command "Compress-Archive -Path 'backend', 'frontend', 'core', 'docker-compose.yml', 'Dockerfile', 'run_local.bat', 'run_local.ps1', 'start_docker.bat', 'stop_docker.bat', 'README.md', '.env.example' -DestinationPath '%OUTPUT_DIR%\%ZIP_NAME%' -Force"
+
+if exist "%OUTPUT_DIR%\%ZIP_NAME%" (
+    echo ✓ Portable ZIP berhasil dibuat: %OUTPUT_DIR%\%ZIP_NAME%
+)
 
 echo.
-echo Memulai proses build (ini bisa memakan waktu beberapa menit)...
+echo ===========================================================================
+echo  PROSES BUILD SELESAI
+echo  Hasil output tersimpan di folder: %OUTPUT_DIR%\
+echo ===========================================================================
 echo.
-
-REM Kita menggunakan --onedir agar proses ekstrak tidak terjadi setiap kali aplikasi dibuka (yang akan sangat lambat untuk ML libs)
-REM Tanpa --windowed untuk saat ini, agar console tetap terlihat untuk debugging awal. 
-REM Jika sudah stabil dan tidak ada error, Anda bisa menambahkan opsi --windowed di bawah ini.
-
-pyinstaller --name "AsmerandaAI" ^
-    --onedir ^
-    --collect-all streamlit ^
-    --collect-all scipy ^
-    --collect-all sklearn ^
-    --collect-all shap ^
-    --collect-all lime ^
-    --collect-all statsmodels ^
-    --hidden-import=streamlit ^
-    run_app.py
-
-echo.
-echo Build selesai! 
-echo Folder executable ada di "dist\AsmerandaAI"
-echo Langkah selanjutnya: Buka 'asmeranda.iss' menggunakan Inno Setup Compiler dan klik tombol 'Compile' untuk membuat file Installer (.exe) final.
 pause
