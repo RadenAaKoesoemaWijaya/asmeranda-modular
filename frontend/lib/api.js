@@ -315,4 +315,25 @@ export const api = {
         contamination: String(contamination),
       }).toString()}`
     ),
+
+  // Advanced ML
+  advancedML: {
+    runUMAP: (config) =>
+      apiFetch("/advanced-ml/umap", { method: "POST", body: JSON.stringify(config) }),
+    runHDBSCAN: (config) =>
+      apiFetch("/advanced-ml/hdbscan", { method: "POST", body: JSON.stringify(config) }),
+    runAnomalyDetection: (config) =>
+      apiFetch("/advanced-ml/anomaly-detection", { method: "POST", body: JSON.stringify(config) }),
+    runForecast: (config) =>
+      apiFetch("/advanced-ml/forecast", { method: "POST", body: JSON.stringify(config) }),
+    handleMissingValues: (config) =>
+      apiFetch("/advanced-ml/handle-missing-values", { method: "POST", body: JSON.stringify(config) }),
+    detectOutliers: (config) =>
+      apiFetch("/advanced-ml/detect-outliers", { method: "POST", body: JSON.stringify(config) }),
+    validateData: (config) =>
+      apiFetch("/advanced-ml/validate-data", { method: "POST", body: JSON.stringify(config) }),
+    getColumns: (stateId) =>
+      apiFetch(`/advanced-ml/columns/${stateId}`),
+  },
 };
+

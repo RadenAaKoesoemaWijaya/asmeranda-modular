@@ -4,10 +4,12 @@ Advanced ML API endpoints.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
+import pandas as pd
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.services.advanced_ml_service import AdvancedMLService
 from backend.services.utilities_service import UtilitiesService
@@ -19,24 +21,60 @@ advanced_ml_service = AdvancedMLService()
 utilities_service = UtilitiesService()
 
 
-# Request Models
+def _get_dataframe_and_targets(state_id: str) -> Tuple[Optional[pd.DataFrame], Optional[List[Any]], Optional[str]]:
+    """Helper to extract DataFrame and targets from state registry."""
+    state = get_state(state_id)
+    if not state:
+        return None, None, f"State ID '{state_id}' tidak ditemukan. Selesaikan preprocessing terlebih dahulu."
+
+    df = None
+    # Check possible keys in state
+    for key in ["X_train", "data", "training_data", "df"]:
+        if key in state and state[key] is not None:
+            val = state[key]
+            if isinstance(val, pd.DataFrame):
+                df = val.copy()
+                break
+            elif isinstance(val, list) and len(val) > 0:
+                df = pd.DataFrame(val)
+                break
+            elif isinstance(val, np.ndarray):
+                df = pd.DataFrame(val)
+                break
+
+    if df is None or df.empty:
+        return None, None, "Tidak ada data training yang tersedia. Jalankan Preprocessing terlebih dahulu."
+
+    # Extract target if present
+    targets = None
+    y_val = state.get("y_train")
+    if y_val is not None:
+        if isinstance(y_val, (pd.Series, np.ndarray, list)):
+            targets = list(y_val)
+
+    return df, targets, None
+
+
+# ── Request Models ────────────────────────────────────────────────────────
 class UMAPRequest(BaseModel):
     state_id: str
+    method: str = "umap"  # umap | pca | tsne
     n_components: int = 2
     n_neighbors: int = 15
     min_dist: float = 0.1
+    metric: str = "euclidean"
 
 
 class HDBSCANRequest(BaseModel):
     state_id: str
     min_cluster_size: int = 5
     min_samples: Optional[int] = None
-    metric: str = 'euclidean'
+    metric: str = "euclidean"
 
 
 class AnomalyDetectionRequest(BaseModel):
     state_id: str
-    method: str = 'isolation_forest'  # isolation_forest | one_class_svm
+    method: str = "isolation_forest"  # isolation_forest | one_class_svm
     contamination: float = 0.1
     n_estimators: int = 100
 
@@ -45,321 +83,244 @@ class ForecastingRequest(BaseModel):
     state_id: str
     target_column: str
     periods: int = 10
-    method: str = 'arima'  # arima | sarima | prophet | lstm | simple | moving_avg | linear
+    method: str = "arima"  # arima | exp_smoothing | moving_avg | linear | simple
 
 
 class MissingValueRequest(BaseModel):
     state_id: str
-    strategy: str = 'auto'
-    numeric_strategy: str = 'mean'
-    categorical_strategy: str = 'mode'
+    strategy: str = "auto"
+    numeric_strategy: str = "mean"
+    categorical_strategy: str = "mode"
     threshold: float = 0.5
 
 
 class OutlierDetectionRequest(BaseModel):
     state_id: str
-    method: str = 'iqr'
+    method: str = "iqr"
     threshold: float = 1.5
-    columns: Optional[list] = None
+    columns: Optional[List[str]] = None
 
 
 class DataValidationRequest(BaseModel):
     state_id: str
-    required_columns: Optional[list] = None
-    column_types: Optional[dict] = None
-    value_ranges: Optional[dict] = None
+    required_columns: Optional[List[str]] = None
+    column_types: Optional[Dict[str, str]] = None
+    value_ranges: Optional[Dict[str, Any]] = None
 
 
-# Response Models
-class UMAPResponse(BaseModel):
-    success: bool
-    data: Optional[dict] = None
-    method: Optional[str] = None
-    parameters: Optional[dict] = None
-    error: Optional[str] = None
-
-
-class ClusteringResponse(BaseModel):
-    success: bool
-    labels: Optional[list] = None
-    method: Optional[str] = None
-    parameters: Optional[dict] = None
-    n_clusters: Optional[int] = None
-    n_noise: Optional[int] = None
-    error: Optional[str] = None
-
-
-class AnomalyDetectionResponse(BaseModel):
-    success: bool
-    anomaly_labels: Optional[list] = None
-    anomaly_scores: Optional[list] = None
-    method: Optional[str] = None
-    parameters: Optional[dict] = None
-    n_anomalies: Optional[int] = None
-    anomaly_rate: Optional[float] = None
-    error: Optional[str] = None
-
-
-class ForecastingResponse(BaseModel):
-    success: bool
-    forecast: Optional[list] = None
-    method: Optional[str] = None
-    parameters: Optional[dict] = None
-    last_observed: Optional[float] = None
-    error: Optional[str] = None
-
-
-class DataProcessingResponse(BaseModel):
-    success: bool
-    data: Optional[dict] = None
-    original_shape: Optional[tuple] = None
-    new_shape: Optional[tuple] = None
-    error: Optional[str] = None
-
-
-# Endpoints
-@router.post("/umap", response_model=UMAPResponse)
-def umap_dimensionality_reduction(request: UMAPRequest) -> UMAPResponse:
-    """Perform UMAP dimensionality reduction."""
+# ── Endpoints ─────────────────────────────────────────────────────────────
+@router.post("/umap")
+def umap_dimensionality_reduction(request: UMAPRequest) -> Dict[str, Any]:
+    """Perform UMAP / PCA / t-SNE dimensionality reduction."""
     try:
-        state = get_state(request.state_id)
-        if not state or "training_data" not in state:
-            return UMAPResponse(
-                success=False,
-                error="No training data available. Please run preprocessing first."
+        data, targets, err = _get_dataframe_and_targets(request.state_id)
+        if err:
+            return {"success": False, "error": err}
+
+        if request.method == "pca":
+            result = advanced_ml_service.pca_dimensionality_reduction(
+                data=data,
+                n_components=request.n_components,
+                targets=targets,
             )
-        
-        import pandas as pd
-        data = pd.DataFrame(state["training_data"])
-        
-        result = advanced_ml_service.umap_dimensionality_reduction(
-            data=data,
-            n_components=request.n_components,
-            n_neighbors=request.n_neighbors,
-            min_dist=request.min_dist
-        )
-        
-        if result["success"]:
-            # Convert DataFrame to dict for JSON serialization
-            if "data" in result and hasattr(result["data"], "to_dict"):
-                result["data"] = result["data"].to_dict(orient="records")
-        
-        return UMAPResponse(**result)
-        
+        elif request.method == "tsne":
+            result = advanced_ml_service.tsne_dimensionality_reduction(
+                data=data,
+                n_components=request.n_components,
+                targets=targets,
+            )
+        else:
+            result = advanced_ml_service.umap_dimensionality_reduction(
+                data=data,
+                n_components=request.n_components,
+                n_neighbors=request.n_neighbors,
+                min_dist=request.min_dist,
+                metric=request.metric,
+                targets=targets,
+            )
+
+        return result
+
     except Exception as e:
-        logger.error(f"UMAP dimensionality reduction failed: {e}")
-        return UMAPResponse(success=False, error=str(e))
+        logger.error(f"Dimensionality reduction failed: {e}")
+        return {"success": False, "error": str(e), "method": request.method}
 
 
-@router.post("/hdbscan", response_model=ClusteringResponse)
-def hdbscan_clustering(request: HDBSCANRequest) -> ClusteringResponse:
-    """Perform HDBSCAN clustering."""
+@router.post("/hdbscan")
+def hdbscan_clustering(request: HDBSCANRequest) -> Dict[str, Any]:
+    """Perform HDBSCAN clustering with metrics and 2D visual projection."""
     try:
-        state = get_state(request.state_id)
-        if not state or "training_data" not in state:
-            return ClusteringResponse(
-                success=False,
-                error="No training data available. Please run preprocessing first."
-            )
-        
-        import pandas as pd
-        data = pd.DataFrame(state["training_data"])
-        
+        data, _, err = _get_dataframe_and_targets(request.state_id)
+        if err:
+            return {"success": False, "error": err}
+
         result = advanced_ml_service.hdbscan_clustering(
             data=data,
             min_cluster_size=request.min_cluster_size,
             min_samples=request.min_samples,
-            metric=request.metric
+            metric=request.metric,
         )
-        
-        return ClusteringResponse(**result)
-        
+        return result
+
     except Exception as e:
         logger.error(f"HDBSCAN clustering failed: {e}")
-        return ClusteringResponse(success=False, error=str(e))
+        return {"success": False, "error": str(e)}
 
 
-@router.post("/anomaly-detection", response_model=AnomalyDetectionResponse)
-def anomaly_detection(request: AnomalyDetectionRequest) -> AnomalyDetectionResponse:
-    """Perform anomaly detection."""
+@router.post("/anomaly-detection")
+def anomaly_detection(request: AnomalyDetectionRequest) -> Dict[str, Any]:
+    """Perform anomaly detection using Isolation Forest or One-Class SVM."""
     try:
-        state = get_state(request.state_id)
-        if not state or "training_data" not in state:
-            return AnomalyDetectionResponse(
-                success=False,
-                error="No training data available. Please run preprocessing first."
-            )
-        
-        import pandas as pd
-        data = pd.DataFrame(state["training_data"])
-        
-        if request.method == 'isolation_forest':
-            result = advanced_ml_service.isolation_forest_anomaly_detection(
-                data=data,
-                contamination=request.contamination,
-                n_estimators=request.n_estimators
-            )
-        elif request.method == 'one_class_svm':
+        data, _, err = _get_dataframe_and_targets(request.state_id)
+        if err:
+            return {"success": False, "error": err}
+
+        if request.method == "one_class_svm":
             result = advanced_ml_service.one_class_svm_anomaly_detection(
                 data=data,
                 nu=request.contamination,
-                kernel='rbf'
+                kernel="rbf",
             )
         else:
-            return AnomalyDetectionResponse(
-                success=False,
-                error=f"Unknown method: {request.method}"
+            result = advanced_ml_service.isolation_forest_anomaly_detection(
+                data=data,
+                contamination=request.contamination,
+                n_estimators=request.n_estimators,
             )
-        
-        return AnomalyDetectionResponse(**result)
-        
+        return result
+
     except Exception as e:
         logger.error(f"Anomaly detection failed: {e}")
-        return AnomalyDetectionResponse(success=False, error=str(e))
+        return {"success": False, "error": str(e)}
 
 
-@router.post("/forecast", response_model=ForecastingResponse)
-def forecast(request: ForecastingRequest) -> ForecastingResponse:
+@router.post("/forecast")
+def forecast(request: ForecastingRequest) -> Dict[str, Any]:
     """Perform time series forecasting."""
     try:
-        state = get_state(request.state_id)
-        if not state or "training_data" not in state:
-            return ForecastingResponse(
-                success=False,
-                error="No training data available. Please run preprocessing first."
-            )
-        
-        import pandas as pd
-        data = pd.DataFrame(state["training_data"])
-        
+        data, _, err = _get_dataframe_and_targets(request.state_id)
+        if err:
+            return {"success": False, "error": err}
+
+        # Check if target column is in data or original dataset
         if request.target_column not in data.columns:
-            return ForecastingResponse(
-                success=False,
-                error=f"Column {request.target_column} not found in data"
-            )
-        
+            state = get_state(request.state_id)
+            if state and "data" in state and isinstance(state["data"], pd.DataFrame):
+                if request.target_column in state["data"].columns:
+                    data = state["data"]
+
+        if request.target_column not in data.columns:
+            return {
+                "success": False,
+                "error": f"Kolom '{request.target_column}' tidak ditemukan dalam dataset. Kolom tersedia: {list(data.columns)[:10]}",
+            }
+
         result = advanced_ml_service.basic_forecasting(
             data=data,
             target_column=request.target_column,
             periods=request.periods,
-            method=request.method
+            method=request.method,
         )
-        
-        return ForecastingResponse(**result)
-        
+        return result
+
     except Exception as e:
         logger.error(f"Forecasting failed: {e}")
-        return ForecastingResponse(success=False, error=str(e))
+        return {"success": False, "error": str(e)}
 
 
-@router.post("/handle-missing-values", response_model=DataProcessingResponse)
-def handle_missing_values(request: MissingValueRequest) -> DataProcessingResponse:
+@router.post("/handle-missing-values")
+def handle_missing_values(request: MissingValueRequest) -> Dict[str, Any]:
     """Handle missing values in the dataset."""
     try:
-        state = get_state(request.state_id)
-        if not state or "training_data" not in state:
-            return DataProcessingResponse(
-                success=False,
-                error="No training data available. Please run preprocessing first."
-            )
-        
-        import pandas as pd
-        data = pd.DataFrame(state["training_data"])
-        
+        data, _, err = _get_dataframe_and_targets(request.state_id)
+        if err:
+            return {"success": False, "error": err}
+
         result = utilities_service.handle_missing_values(
             data=data,
             strategy=request.strategy,
             numeric_strategy=request.numeric_strategy,
             categorical_strategy=request.categorical_strategy,
-            threshold=request.threshold
+            threshold=request.threshold,
         )
-        
-        if result["success"]:
-            # Update state with cleaned data
-            state["training_data"] = result["data"].to_dict(orient="records")
-            # Convert shapes to lists for JSON serialization
+
+        if result.get("success"):
+            state = get_state(request.state_id)
+            if state:
+                state["X_train"] = result["data"]
             result["original_shape"] = list(result["original_shape"])
             result["new_shape"] = list(result["new_shape"])
-            if "data" in result:
-                result["data"] = {"shape": result["new_shape"], "processed": True}
-        
-        return DataProcessingResponse(**result)
-        
+            result["data"] = {
+                "shape": result["new_shape"],
+                "processed": True,
+                "preview": result["data"].head(10).to_dict(orient="records"),
+            }
+
+        return result
+
     except Exception as e:
         logger.error(f"Missing value handling failed: {e}")
-        return DataProcessingResponse(success=False, error=str(e))
+        return {"success": False, "error": str(e)}
 
 
-@router.post("/detect-outliers", response_model=DataProcessingResponse)
-def detect_outliers(request: OutlierDetectionRequest) -> DataProcessingResponse:
+@router.post("/detect-outliers")
+def detect_outliers(request: OutlierDetectionRequest) -> Dict[str, Any]:
     """Detect outliers in the dataset."""
     try:
-        state = get_state(request.state_id)
-        if not state or "training_data" not in state:
-            return DataProcessingResponse(
-                success=False,
-                error="No training data available. Please run preprocessing first."
-            )
-        
-        import pandas as pd
-        data = pd.DataFrame(state["training_data"])
-        
+        data, _, err = _get_dataframe_and_targets(request.state_id)
+        if err:
+            return {"success": False, "error": err}
+
         result = utilities_service.detect_outliers(
             data=data,
             method=request.method,
             threshold=request.threshold,
-            columns=request.columns
+            columns=request.columns,
         )
-        
-        return DataProcessingResponse(data=result)
-        
+        return result
+
     except Exception as e:
         logger.error(f"Outlier detection failed: {e}")
-        return DataProcessingResponse(success=False, error=str(e))
+        return {"success": False, "error": str(e)}
 
 
-@router.post("/validate-data", response_model=DataProcessingResponse)
-def validate_data(request: DataValidationRequest) -> DataProcessingResponse:
+@router.post("/validate-data")
+def validate_data(request: DataValidationRequest) -> Dict[str, Any]:
     """Validate data against constraints."""
     try:
-        state = get_state(request.state_id)
-        if not state or "training_data" not in state:
-            return DataProcessingResponse(
-                success=False,
-                error="No training data available. Please run preprocessing first."
-            )
-        
-        import pandas as pd
-        data = pd.DataFrame(state["training_data"])
-        
+        data, _, err = _get_dataframe_and_targets(request.state_id)
+        if err:
+            return {"success": False, "error": err}
+
         result = utilities_service.validate_data(
             data=data,
             required_columns=request.required_columns,
             column_types=request.column_types,
-            value_ranges=request.value_ranges
+            value_ranges=request.value_ranges,
         )
-        
-        return DataProcessingResponse(data=result)
-        
+        return {"success": True, "data": result}
+
     except Exception as e:
         logger.error(f"Data validation failed: {e}")
-        return DataProcessingResponse(success=False, error=str(e))
+        return {"success": False, "error": str(e)}
 
 
-@router.post("/detect-data-types")
-def detect_data_types(state_id: str) -> Dict[str, Any]:
-    """Detect data types for all columns."""
+@router.get("/columns/{state_id}")
+def get_columns(state_id: str) -> Dict[str, Any]:
+    """Get available columns and types for a state."""
     try:
-        state = get_state(state_id)
-        if not state or "training_data" not in state:
-            return {"success": False, "error": "No training data available"}
-        
-        import pandas as pd
-        data = pd.DataFrame(state["training_data"])
-        
-        result = utilities_service.detect_data_types(data)
-        return {"success": True, "data_types": result}
-        
+        data, _, err = _get_dataframe_and_targets(state_id)
+        if err:
+            return {"success": False, "error": err}
+
+        num_cols = data.select_dtypes(include=[np.number]).columns.tolist()
+        cat_cols = data.select_dtypes(exclude=[np.number]).columns.tolist()
+        return {
+            "success": True,
+            "columns": list(data.columns),
+            "numerical_columns": num_cols,
+            "categorical_columns": cat_cols,
+            "n_rows": len(data),
+        }
     except Exception as e:
-        logger.error(f"Data type detection failed: {e}")
         return {"success": False, "error": str(e)}
