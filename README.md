@@ -1,6 +1,8 @@
 # Asmeranda AI
 
-Platform machine learning modular berbasis enterprise untuk workflow data science *end-to-end*. Mulai dari upload dataset, eksplorasi data (EDA), preprocessing adaptif, pelatihan model, optimasi hyperparameter, interpretasi model (XAI), hingga deteksi anomali dan forecasting deret waktu — semua dalam satu platform terintegrasi dengan keamanan berbasis peran (RBAC).
+Platform machine learning modular berbasis enterprise untuk workflow data science *end-to-end*. Mulai dari upload dataset, eksplorasi data (EDA), preprocessing adaptif, feature selection, pelatihan model, optimasi hyperparameter, interpretasi model (Explainable AI: SHAP & LIME), hingga inferensi deteksi data baru dengan model yang telah di-download/diekspor — semua dalam satu platform terintegrasi dengan keamanan berbasis peran (RBAC).
+
+> 📘 **Dokumentasi Lengkap Arsitektur**: Silakan baca [`ARSITEKTUR ASMERANDA.md`](file:///c:/asmeranda-modular/ARSITEKTUR%20ASMERANDA.md) untuk rincian mendalam mengenai topologi sistem, alur data (*dataflow*), siklus hidup *state*, dan model keamanan.
 
 ---
 
@@ -8,66 +10,78 @@ Platform machine learning modular berbasis enterprise untuk workflow data scienc
 
 ```mermaid
 graph TD
-    User([Pengguna / Browser]) -->|HTTP Port 80 / 443| Nginx[Nginx Reverse Proxy]
+    User([Pengguna / Client Browser]) -->|HTTP Port 80 / 443| Nginx[Nginx Reverse Proxy]
     
     subgraph Docker Network [asmeranda-network]
-        Nginx -->|/ & static assets| Frontend[Frontend: Next.js 14 App Router :3000]
-        Nginx -->|/api/* & /health| Backend[Backend: FastAPI + Uvicorn :8000]
-        Frontend -.->|API Calls| Backend
+        Nginx -->|/ & Static Assets| Frontend[Frontend: Next.js 14 App Router :3000]
+        Nginx -->|/api/v1/* & /health| Backend[Backend: FastAPI + Uvicorn :8000]
+        Frontend -.->|REST API & WS Client| Backend
         Backend --> CoreEngine[ML Engine & Services]
-        Backend --> Storage[(Volume: /app/data & SQLite)]
+        Backend --> Storage[(Persistent Volume: /app/data & SQLite)]
     end
 
     subgraph ML Engine & Services
-        CoreEngine --> Preprocessing[Preprocessing & Imputation]
-        CoreEngine --> Training[Supervised ML & AutoML]
-        CoreEngine --> Unsupervised[Clustering & UMAP/PCA]
+        CoreEngine --> IngestEDA[Dataset Ingestion & EDA]
+        CoreEngine --> Preprocessing[Adaptive Preprocessing & Imbalance]
+        CoreEngine --> FeatSelect[Feature Selection & Dimensionality]
+        CoreEngine --> Training[Supervised ML & Ensemble Models]
         CoreEngine --> Explainable[XAI: SHAP & LIME]
-        CoreEngine --> TimeSeries[Prophet & Statsmodels]
-        CoreEngine --> OptunaOpt[Bayesian Optuna]
+        CoreEngine --> Inference[New Data Inference & Model Export]
+        CoreEngine --> AdvancedML[UMAP, HDBSCAN & Time Series]
+        CoreEngine --> OptunaOpt[Bayesian Optuna Tuner]
     end
 ```
 
 ---
 
-## 🚀 Fitur Utama
+## 🚀 Alur Kerja 6 Tahap Utama (*End-to-End Workflow*)
 
-### 🔐 Keamanan & Kontrol Akses
-- **RBAC (Role-Based Access Control)**: Tiga tingkat akses — `Admin`, `Analyst`, dan `Viewer`.
-- **JWT & API Key**: Token sesi terenkripsi AES-256/GCM dan kunci API layanan.
-- **Validasi Password**: Aturan kompleksitas ketat (huruf besar, kecil, angka, simbol, panjang minimum).
-- **Security Middleware**: Header keamanan HTTP (CSP, HSTS, X-Frame-Options), proteksi DoS, dan rate limiting adaptif via SlowAPI.
-- **Audit Log**: Jejak aktivitas terstruktur di `security_audit.log`.
+Platform ini mendukung siklus machine learning lengkap tanpa dependensi eksternal:
 
-### 🧠 Machine Learning Supervised & Pelatihan Model
-- **12+ Algoritma Lengkap**: RandomForest, GradientBoosting, XGBoost, LightGBM, CatBoost, SVM (SVC/SVR), DecisionTree, K-Nearest Neighbors (KNN), Regresi Logistik/Linear, Voting Ensemble (Hard/Soft), dan Stacking Ensemble.
-- **Validasi Silang (Cross-Validation)**: K-Fold, Stratified K-Fold (seimbang untuk kelas minoritas), Leave-One-Out, Time Series Split, dan Train-Test Split adaptif.
-- **Tingkat Kepentingan Fitur (Feature Importance)**: Ekstraksi kontribusi fitur otomatis dengan visualisasi grafik batang interaktif untuk semua model pohon dan koefisien model linear.
-- **Diagnostik Kurva Pembelajaran (Learning Curve)**: Analisis bias vs variansi otomatis (*underfitting vs overfitting detection*) dengan grafik train-test gap.
-- **Papan Peringkat Benchmark Seluruh Model (Model Comparison Leaderboard)**: Pengujian otomatis seluruh algoritma dalam satu klik untuk menentukan model dengan skor metrik terbaik.
-- **Optimasi Hiperparameter Terintegrasi**: Sinkronisasi 1-klik dengan modul Optuna / Random Search / Grid Search.
-- **Evaluasi Mendalam & Ekspor**: ROC-AUC, PR Curve, Confusion Matrix interaktif, MCC, Balanced Accuracy, serta download artefak model (`.pkl`).
+```mermaid
+graph LR
+    A[1. Upload Dataset] --> B[2. Preprocessing Data]
+    B --> C[3. Feature Selection]
+    C --> D[4. Pelatihan Model]
+    D --> E[5. Explainable AI]
+    E --> F[6. Deteksi Data Baru]
+    D --> F
+```
 
-### 🔍 Machine Learning Unsupervised & Advanced ML Suite
-- **Reduksi Dimensi Interaktif**: UMAP (*Uniform Manifold Approximation and Projection*), PCA, dan t-SNE dengan proyeksi 2D/3D, *hover tooltips*, serta pewarnaan berbasis label target.
-- **HDBSCAN Clustering**: Klasterisasi hierarkis berbasis densitas tanpa perlu menentukan $K$ di awal, lengkap dengan metrik Silhouette, Calinski-Harabasz, dan Davies-Bouldin.
-- **Deteksi Anomali (Anomaly Detection)**: Deteksi observasi menyimpang via Isolation Forest dan One-Class SVM lengkap dengan tabel outlier ekstrim dan skor anomali.
-- **Time Series Forecasting**: Peramalan deret waktu menggunakan ARIMA, Exponential Smoothing (SES), Moving Average, dan Linear Trend dengan visualisasi area batas keyakinan 95% (*Confidence Interval*).
-- **Data Utilities & Cleansing**: Pembersihan nilai hilang (imputasi cerdas) dan deteksi pencilan statistik (IQR & Z-Score) per kolom.
+1. **📂 1. Upload Dataset & Eksplorasi Data (EDA)**:
+   - Mendukung format **CSV**, **Excel (.xlsx, .xls)**, **JSON**, dan **Parquet**.
+   - Validasi keamanan otomatis (deteksi konten executable terlarang seperti header MZ/ELF).
+   - Inferensi tipe data otomatis (numerik, kategorik, temporal, teks), analisis statistik deskriptif, missing values, dan visualisasi korelasi matriks.
 
+2. **⚙️ 2. Data Preprocessing Adaptif**:
+   - **Imputasi Nilai Hilang**: Mean, median, most frequent (modus), konstanta, atau drop rows.
+   - **Pembersihan Outlier**: Statistik IQR, Z-Score, Winsorization, atau pemangkasan.
+   - **Encoding Kategorikal**: One-Hot Encoding otomatis & Label Encoding.
+   - **Feature Scaling**: Standard Scaler, MinMax Scaler, Robust Scaler (kebal pencilan), Power Transformer, dan Quantile Transformer.
+   - **Penanganan Ketidakseimbangan (Imbalance Dataset)**: SMOTE, ADASYN, Random Oversampling, dan Undersampling.
 
-### 💡 Explainable AI (XAI)
-- **SHAP**: Feature importance global menggunakan TreeExplainer, LinearExplainer, dan KernelExplainer.
-- **LIME**: Penjelasan prediksi lokal per instance untuk data tabular.
+3. **🎯 3. Feature Selection (Seleksi Fitur Cerdas)**:
+   - Metode **SelectKBest** (ANOVA F-Score / Mutual Information).
+   - Filter Korelasi multikolinieritas (*Correlation Thresholding*).
+   - Ambang Batas Variansi (*Variance Threshold*).
+   - *Recursive Feature Elimination* (RFE) berbasis model dengan percepatan paralel.
 
-### 📈 Time Series & Deteksi Anomali
-- **Forecasting**: ARIMA, SARIMA, Prophet, LSTM, dan rata-rata bergerak dengan inferensi frekuensi otomatis.
-- **Deteksi Anomali**: Isolation Forest, One-Class SVM, dan batas statistik rolling.
+4. **🧠 4. Pelatihan Model Machine Learning Supervised**:
+   - **12+ Algoritma Lengkap**: RandomForest, GradientBoosting, XGBoost, LightGBM, CatBoost, SVM (SVC/SVR), DecisionTree, K-Nearest Neighbors (KNN), Logistic/Linear Regression, Voting Ensemble (Hard/Soft), dan Stacking Ensemble.
+   - **Validasi Silang (Cross-Validation)**: Stratified K-Fold (seimbang untuk minoritas), K-Fold standar, Leave-One-Out, Time Series Split, dan Train-Test holdout.
+   - **Evaluasi & Diagnostik Lengkap**: Accuracy, Balanced Accuracy, F1 Macro/Micro/Weighted, MCC, ROC-AUC, PR Curve, Confusion Matrix interaktif, serta kurva *Learning Curve* (analisis *bias vs variance / underfitting vs overfitting*).
+   - **Model Comparison Leaderboard**: Pengujian otomatis seluruh algoritma dalam 1-klik untuk menentukan model berkinerja terbaik.
+   - **Optimasi Hiperparameter Terintegrasi**: Sinkronisasi 1-klik dengan modul Optuna Bayesian Search, Grid Search, dan Random Search.
 
-### 🧹 Pemrosesan Data & EDA
-- **Inferensi Tipe Otomatis**: Deteksi kolom numerik, kategorik, datetime, dan teks.
-- **Pipeline Preprocessing**: Imputasi nilai hilang, deteksi outlier, encoding kategorik, dan scaling fitur.
-- **EDA Suite**: Statistik deskriptif, histogram distribusi, dan heatmap korelasi.
+5. **📊 5. Explainable AI (XAI)**:
+   - **SHAP (SHapley Additive exPlanations)**: Analisis kontribusi fitur global berbasis `TreeExplainer`, `LinearExplainer`, dan `KernelExplainer` lengkap dengan grafik beeswarm dan rangkuman kepentingan fitur.
+   - **LIME (Local Interpretable Model-agnostic Explanations)**: Penjelasan prediksi lokal granular per observasi data tabular.
+
+6. **🔮 6. Deteksi & Inferensi Data Baru (Model Export & Prediction)**:
+   - **Ekspor Artefak Model**: Download model terlatih dalam format standar ter-serialisasi (`.pkl`) untuk kebutuhan deployment mandiri.
+   - **Impor Model Eksternal**: Unggah kembali file `.pkl` yang telah diunduh untuk inferensi instan.
+   - **Mode 1 (Formulir Interaktif)**: Masukkan nilai fitur satu per satu pada antarmuka dinamis untuk memperoleh hasil prediksi dan skor probabilitas keyakinan (*confidence percentage*).
+   - **Mode 2 (Deteksi Batch File)**: Drag-and-drop file CSV/Excel data baru yang belum pernah dilihat model, jalankan inferensi massal, tinjau tabel hasil, dan unduh data berlabel prediksi lengkap (`.csv`).
 
 ---
 
@@ -79,11 +93,14 @@ graph TD
 | **Engine Data** | Polars, Pandas, PyArrow, NumPy |
 | **Machine Learning** | scikit-learn, XGBoost, LightGBM, CatBoost, Optuna, statsmodels |
 | **Explainable AI** | SHAP, LIME |
-| **Visualisasi** | Matplotlib, Seaborn |
-| **Keamanan & Auth** | PyJWT, Bcrypt, Cryptography, Passlib |
-| **Frontend** | Next.js 14 (App Router), React 18, Zustand, Custom CSS |
+| **Visualisasi & Plotting**| Matplotlib, Seaborn |
+| **Keamanan & Auth** | PyJWT, Bcrypt, Cryptography, Passlib (RBAC: Admin, Analyst, Viewer) |
+| **Frontend** | Next.js 14 (App Router), React 18, Zustand, Custom CSS Design System |
 | **Infra & Container** | Docker, Docker Compose, Nginx (Alpine), Multi-stage build |
-| **Cloud Target** | Azure Con## 📦 3 Pilihan Metode Deployment Resmi
+
+---
+
+## 📦 3 Pilihan Metode Deployment Resmi
 
 Asmeranda AI didesain untuk berjalan secara optimal, aman, dan mandiri (*self-hosted / on-premise*) melalui **3 opsi deployment**:
 
@@ -190,40 +207,36 @@ Menyediakan paket instalasi mandiri untuk pengguna sistem operasi Windows tanpa 
 | `/api/v1/datasets` | `POST` | Upload dataset (CSV, XLSX, Parquet, JSON) |
 | `/api/v1/datasets` | `GET` | Daftar semua dataset yang tersimpan |
 | `/api/v1/eda/{id}/summary` | `GET` | Statistik deskriptif & analisis missing values |
-| `/api/v1/preprocessing/run` | `POST` | Eksekusi pipeline preprocessing & feature engineering |
+| `/api/v1/preprocessing/run` | `POST` | Eksekusi pipeline preprocessing & feature selection |
 | `/api/v1/clustering/cluster` | `POST` | Analisis clustering unsupervised |
 | `/api/v1/clustering/optimal-k`| `POST` | Analisis Elbow & Silhouette Score |
 | `/api/v1/optimization/optimize` | `POST` | Hyperparameter tuning dengan Optuna Bayesian search |
-| `/api/v1/training/start` | `POST` | Memulai training model ML secara asynchronous dengan job tracking |
-| `/api/v1/training/jobs` | `GET` | List semua training jobs dan status eksekusi |
-| `/api/v1/training/jobs/{job_id}` | `GET` | Cek status spesifik training job (QUEUED / RUNNING / SUCCESS / FAILED) |
-| `/api/v1/training/evaluate`| `POST` | Evaluasi model komprehensif |
+| `/api/v1/training/start` | `POST` | Memulai training model ML dengan job tracking |
+| `/api/v1/training/compare` | `POST` | Benchmark dan komparasi otomatis seluruh model |
+| `/api/v1/training/learning-curve` | `POST` | Pembuatan grafik diagnostik kurva pembelajaran |
+| `/api/v1/training/models/{id}/download` | `GET` | Download artefak model serialisasi (`.pkl`) |
+| `/api/v1/training/models/upload` | `POST` | Upload dan registrasi file model (`.pkl`) eksternal |
+| `/api/v1/training/models/{id}/predict` | `POST` | Inferensi prediksi interaktif pada input record baru |
+| `/api/v1/training/models/{id}/predict-file` | `POST` | Inferensi batch langsung dari file CSV/Excel data baru |
 | `/api/v1/interpretation/shap` | `POST` | Kalkulasi global & local feature importance (SHAP) |
-| `/api/v1/interpretation/lime` | `POST` | Penjelasan lokal prediksi per data (LIME) |
+| `/api/v1/interpretation/lime` | `POST` | Penjelasan lokal prediksi per instance data (LIME) |
 | `/api/v1/timeseries/{id}/forecast` | `GET` | Pelatihan model forecasting deret waktu |
 | `/api/v1/ws/{channel_id}` | `WS` | WebSocket multi-channel untuk streaming status progress |
 
 ---
 
-## ⚡ Optimasi Kinerja & Arsitektur (Performance & Reliability)
+## 🧪 Testing & Jaminan Kualitas (QA Verification)
 
-- **TTL & State Eviction**: Manajemen memori in-memory state dengan TTL otomatis (1 jam) dan kapasitas maksimum (100 states) untuk mencegah OOM/memory leak.
-- **Lazy Metadata Persistence**: Penyimpanan state ke disk hanya untuk metadata skalar ringan, menghindari serialisasi berlebih terhadap DataFrame besar.
-- **Asynchronous Training Job Tracking**: Antrean training dengan status transparan (`QUEUED` ➔ `RUNNING` ➔ `SUCCESS`/`FAILED`) dan endpoint status polling.
-- **LRU In-Memory Dataset Caching**: Pembacaan dataset ter-cache via `lru_cache` untuk mempercepat pemrosesan EDA dan preprocessing berulang.
-- **Parallel Feature Selection**: Eksekusi RFE dengan `n_jobs=-1` dan adaptive step size untuk percepatan pemilihan fitur.
-- **Thread-Safe Clustering**: Isolasi scaler per request untuk mencegah *race condition* saat multi-user concurrent requests.
-- **Non-Blocking Fetch & Timeout**: AbortController terintegrasi di frontend API client untuk mencegah freeze saat koneksi backend lambat.
-
----
-
-## 🧪 Testing & Verifikasi Kualitas
+Sistem telah diuji secara komprehensif dengan **131 Automated Tests** yang mencakup pengujian unit, integrasi, keamanan, dan end-to-end lifecycle.
 
 ```bash
-# Menjalankan unit tests validator workflow
-python -c "from workflow_validator import WorkflowValidator; print(WorkflowValidator({'dataset_id': 'd1'}).validate('upload_to_eda'))"
+# Menjalankan seluruh test suite backend (Unit, Integration, Security, E2E)
+python -m pytest backend/tests/ -v --no-cov
 
-# Menjalankan build verifikasi frontend
+# Menjalankan test validator alur kerja
+python -m pytest backend/tests/unit/test_workflow_validator.py -v
+
+# Menjalankan verifikasi kompilasi frontend Next.js
 cd frontend && npm run build
 ```
 
@@ -238,16 +251,28 @@ asmeranda-modular/
 │   ├── core/                 # Auth, Security, Config, State Management
 │   ├── services/             # Core ML, EDA, XAI, Preprocessing services
 │   ├── schemas/              # Pydantic schemas (request/response)
+│   ├── tests/                # Test suite komprehensif (Unit, Security, Integration)
 │   ├── Dockerfile            # Container definition untuk backend
 │   └── requirements-backend.txt # Backend runtime dependencies
 ├── frontend/                 # Source code Frontend (Next.js 14 App Router)
 │   ├── app/                  # Next.js pages & routes
+│   │   ├── data-upload/      # Upload data
+│   │   ├── eda/              # Eksplorasi data
+│   │   ├── preprocessing/    # Preprocessing & Feature selection
+│   │   ├── optimization/     # Optimasi hiperparameter
+│   │   ├── training/         # Pelatihan model & benchmark
+│   │   ├── shap/             # Interpretasi SHAP
+│   │   ├── lime/             # Interpretasi LIME
+│   │   ├── inference/        # Deteksi data baru & model prediction
+│   │   ├── clustering/       # Clustering analysis
+│   │   ├── timeseries/       # Time series & forecasting
+│   │   └── advanced-ml/      # Advanced ML suite
 │   ├── components/           # UI Components (Sidebar, Navbar, dll)
 │   ├── lib/                  # Store (Zustand), API client, i18n
 │   ├── Dockerfile            # Container definition untuk frontend
 │   └── package.json          # Node dependencies & scripts
 ├── nginx/                    # Konfigurasi reverse proxy Nginx
-├── data/                     # Direktori penyimpanan dataset & model
+├── data/                     # Direktori penyimpanan dataset & model (.pkl)
 ├── docker-compose.yml        # Multi-container orchestration (Opsi 1)
 ├── start_docker.bat          # 1-klik start Docker Desktop (Opsi 1)
 ├── stop_docker.bat           # 1-klik stop Docker Desktop (Opsi 1)
@@ -258,6 +283,7 @@ asmeranda-modular/
 ├── asmeranda.iss             # Inno Setup Windows installer script (Opsi 3)
 ├── build_installer.bat       # Builder Windows installer & ZIP (Opsi 3)
 ├── workflow_validator.py     # Validator alur transisi state ML
+├── ARSITEKTUR ASMERANDA.md   # Dokumentasi arsitektur sistem lengkap
 └── README.md                 # Dokumentasi proyek
 ```
 
