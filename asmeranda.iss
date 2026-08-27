@@ -40,11 +40,14 @@ Source: "start_docker.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "stop_docker.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "docker-compose.yml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Dockerfile"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Dockerfile.backend"; DestDir: "{app}"; Flags: ignoreversion
 Source: ".dockerignore"; DestDir: "{app}"; Flags: ignoreversion
 Source: ".env.example"; DestDir: "{app}"; Flags: ignoreversion
 Source: "workflow_validator.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "requirements-backend.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "deploy-docker-desktop.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "deploy-local.sh"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "ARSITEKTUR ASMERANDA.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Jalankan Asmeranda AI (Localhost)"; Filename: "{app}\run_local.bat"

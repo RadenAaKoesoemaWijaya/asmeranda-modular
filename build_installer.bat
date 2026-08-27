@@ -38,7 +38,7 @@ REM 2. Buat Portable ZIP Bundle
 echo.
 echo [2/2] Membuat Portable ZIP Package...
 set ZIP_NAME=AsmerandaAI-Portable-v2.0.0.zip
-powershell -NoProfile -Command "Compress-Archive -Path 'backend', 'frontend', 'core', 'docker-compose.yml', 'Dockerfile', 'run_local.bat', 'run_local.ps1', 'start_docker.bat', 'stop_docker.bat', 'README.md', '.env.example' -DestinationPath '%OUTPUT_DIR%\%ZIP_NAME%' -Force"
+powershell -NoProfile -Command "Compress-Archive -Path 'backend', 'frontend', 'core', 'nginx', 'docker-compose.yml', 'Dockerfile', 'Dockerfile.backend', 'run_local.bat', 'run_local.ps1', 'start_docker.bat', 'stop_docker.bat', 'deploy-docker-desktop.ps1', 'deploy-local.sh', 'workflow_validator.py', 'README.md', 'ARSITEKTUR ASMERANDA.md', '.env.example' -DestinationPath '%OUTPUT_DIR%\%ZIP_NAME%' -Force"
 
 if exist "%OUTPUT_DIR%\%ZIP_NAME%" (
     echo ✓ Portable ZIP berhasil dibuat: %OUTPUT_DIR%\%ZIP_NAME%

@@ -31,6 +31,7 @@ class WorkflowValidator:
             ],
             "training_to_evaluation": ["model_id", "model_type"],
             "training_to_xai": ["model_id", "model_type"],
+            "training_to_inference": ["model_id"],
             "preprocessing_to_clustering": ["dataset_id", "state_id"],
             "eda_to_clustering": ["dataset_id"],
         }
@@ -83,9 +84,9 @@ class WorkflowValidator:
             elif not self.state.get("target_column") and problem_type in ("Classification", "Regression"):
                 errors.append("Kolom target belum ditentukan.")
 
-        elif step_name in ("training_to_evaluation", "training_to_xai"):
+        elif step_name in ("training_to_evaluation", "training_to_xai", "training_to_inference"):
             if not self.state.get("model_id"):
-                errors.append("Model belum dilatih atau model_id tidak ditemukan.")
+                errors.append("Model belum dilatih/dipilih atau model_id tidak ditemukan.")
 
         elif step_name in ("preprocessing_to_clustering", "eda_to_clustering"):
             if not self.state.get("dataset_id"):
