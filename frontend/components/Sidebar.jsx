@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useWorkflow } from "@/lib/workflow-store";
+import { useAuth } from "@/lib/auth-store";
 import { useT } from "@/lib/i18n";
 
 const STEPS = [
@@ -90,6 +91,9 @@ export default function Sidebar() {
   const setLang = useWorkflow((s) => s.set);
   const datasetId = useWorkflow((s) => s.datasetId);
   const tr = useT(lang);
+
+  const user = useAuth((s) => s.user);
+  const logout = useAuth((s) => s.logout);
 
   const getStepTooltip = (step, enabled) => {
     if (enabled) return "";
@@ -204,8 +208,64 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* ── Footer — Language ── */}
+      {/* ── Footer — User Profile & Language ── */}
       <div className="sidebar-footer">
+        {user && (
+          <div style={{
+            marginBottom: "12px",
+            padding: "8px 10px",
+            borderRadius: "var(--radius-md, 0.5rem)",
+            background: "var(--sidebar-surface, #edf4ff)",
+            border: "1px solid var(--sidebar-border, #dfeafc)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+              <span style={{ fontSize: "14px" }}>👤</span>
+              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                <span style={{
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "var(--sidebar-text, #12314d)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}>
+                  {user.username || "User"}
+                </span>
+                <span style={{
+                  fontSize: "10px",
+                  color: "var(--color-primary-600, #2563eb)",
+                  fontWeight: "500",
+                  textTransform: "uppercase",
+                }}>
+                  {user.role || "analyst"}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              title="Keluar / Logout"
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "14px",
+                padding: "4px",
+                borderRadius: "var(--radius-sm, 0.25rem)",
+                color: "var(--color-error-600, #dc2626)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              🚪
+            </button>
+          </div>
+        )}
+
         <label className="sidebar-lang-label">🌐 Bahasa / Language</label>
         <select
           className="sidebar-lang-select"

@@ -6,10 +6,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.schemas.models import ClusteringConfig, ClusteringResponse
 from backend.services.clustering_service import ClusteringService
+from backend.core.auth import UserInDB, UserRole, auth_required
 from core.state import get_state
 
 logger = logging.getLogger("asmeranda.api.clustering")
@@ -18,7 +19,10 @@ clustering_service = ClusteringService()
 
 
 @router.post("/cluster", response_model=ClusteringResponse)
-def perform_clustering(config: ClusteringConfig) -> ClusteringResponse:
+def perform_clustering(
+    config: ClusteringConfig,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> ClusteringResponse:
     """Perform clustering analysis on training data."""
     try:
         # Get data from state
@@ -93,7 +97,10 @@ def perform_clustering(config: ClusteringConfig) -> ClusteringResponse:
 
 
 @router.post("/optimal-k")
-def find_optimal_k(config: ClusteringConfig):
+def find_optimal_k(
+    config: ClusteringConfig,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+):
     """Find optimal number of clusters using elbow and silhouette methods."""
     try:
         # Get data from state

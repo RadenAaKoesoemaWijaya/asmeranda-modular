@@ -6,11 +6,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.schemas.models import RecommendationRequest, RecommendationResponse
 from backend.services.recommendation_service import RecommendationService
 from backend.services import dataset_service
+from backend.core.auth import UserInDB, auth_required
 
 logger = logging.getLogger("asmeranda.api.recommendations")
 router = APIRouter()
@@ -18,7 +19,10 @@ recommendation_service = RecommendationService()
 
 
 @router.post("/analyze", response_model=RecommendationResponse)
-def analyze_dataset(config: RecommendationRequest) -> RecommendationResponse:
+def analyze_dataset(
+    config: RecommendationRequest,
+    _user: UserInDB = Depends(auth_required()),
+) -> RecommendationResponse:
     """Analyze dataset and provide AI-powered recommendations."""
     try:
         dataset_id = config.dataset_id

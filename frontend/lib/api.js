@@ -80,6 +80,12 @@ export async function apiFetch(path, options = {}) {
       }
     }
     if (!res.ok) {
+      if (res.status === 401 && !path.includes("/auth/login")) {
+        setAuthToken(null);
+        if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+      }
       const detail =
         (payload && (payload.detail || payload.message)) || res.statusText;
       throw new ApiError(detail || "Request gagal", res.status, payload);

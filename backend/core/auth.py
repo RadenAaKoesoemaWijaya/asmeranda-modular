@@ -322,3 +322,47 @@ async def verify_api_key(
             detail="API Key tidak valid atau tidak disertakan"
         )
     return x_api_key
+
+
+# ---------------------------------------------------------------------------
+# Configurable Auth Dependency
+# ---------------------------------------------------------------------------
+def auth_required(*allowed_roles: UserRole):
+    """
+    Dependency factory yang menerapkan JWT guard HANYA jika
+    settings.require_auth = True (env var ASMERANDA_REQUIRE_AUTH=true).
+
+    - Jika require_auth = False (default dev/test): lolos tanpa token.
+    - Jika require_auth = True (production): token wajib, role diperiksa.
+    - Jika allowed_roles kosong: semua role yang terautentikasi boleh masuk.
+
+    Cara pakai di router:
+        @router.get("/endpoint")
+        def my_endpoint(user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST))):
+            ...
+    """
+    async def _dependency(
+        current_user: Optional[UserInDB] = Depends(get_current_user),
+    ) -> Optional[UserInDB]:
+        if not getattr(settings, "require_auth", False):
+            # Dev / test mode — izinkan akses tanpa autentikasi
+            return current_user
+
+        # Production: wajib terautentikasi
+        if not current_user or not current_user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Autentikasi diperlukan. Silakan login terlebih dahulu.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Cek role jika ada pembatasan
+        if allowed_roles and current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Akses ditolak. Diperlukan role: {[r.value for r in allowed_roles]}",
+            )
+
+        return current_user
+
+    return _dependency

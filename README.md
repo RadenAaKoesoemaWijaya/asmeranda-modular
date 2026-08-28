@@ -189,11 +189,52 @@ Menyediakan paket instalasi mandiri untuk pengguna sistem operasi Windows tanpa 
 
 ---
 
-## 🔑 Kredensial Default
+## 🔐 Autentikasi, Keamanan & Kredensial Pengujian
 
-| Akun | Username | Password Default | Role |
-|---|---|---|---|
-| **Administrator** | `admin` | `Admin@Asmeranda2026!` | `admin` |
+Asmeranda AI menerapkan sistem autentikasi **JSON Web Token (JWT)** terintegrasi dengan **Role-Based Access Control (RBAC)** dan enkripsi kata sandi menggunakan standard industri **Bcrypt** (12 rounds).
+
+### 🔑 Kredensial Bawaan untuk Pengujian (Testing Credentials)
+
+| Akun | Username | Password Default | Role | Hak Akses Utama |
+|---|---|---|---|---|
+| **Administrator** | `admin` | `Admin@Asmeranda2026!` | `admin` | Akses penuh (Upload, Training, Evaluasi, Delete Model, Manajemen User) |
+
+> 💡 **Login Cepat**: Pada halaman `/login`, tersedia tombol **"Gunakan Akun Default (admin)"** untuk mengisi form login secara instan dalam 1-klik saat pengujian.
+
+---
+
+### 🛡️ Matriks Hak Akses (Role-Based Access Control / RBAC)
+
+| Modul / Tindakan | `admin` | `analyst` | `viewer` |
+|---|:---:|:---:|:---:|
+| **Upload Dataset & EDA** | ✅ | ✅ | ❌ (Hanya View EDA) |
+| **Preprocessing & Feature Selection** | ✅ | ✅ | ❌ |
+| **Optimasi & Pelatihan Model** | ✅ | ✅ | ❌ |
+| **Explainable AI (SHAP & LIME)** | ✅ | ✅ | ✅ (Read-Only) |
+| **Inferensi & Batch Prediction** | ✅ | ✅ | ✅ |
+| **Download Artefak Model (.pkl)** | ✅ | ✅ | ✅ |
+| **Hapus Dataset / Model** | ✅ | ❌ | ❌ |
+| **Registrasi Pengguna Baru** | ✅ | ❌ | ❌ |
+
+---
+
+### ⚙️ Konfigurasi Autentikasi di Backend (`.env`)
+
+Sistem mendukung fleksibilitas mode autentikasi melalui environment variable:
+
+```env
+# Mengaktifkan verifikasi JWT ketat pada seluruh endpoint API (Production)
+ASMERANDA_REQUIRE_AUTH=true
+
+# Secret key untuk signing token JWT (Wajib diganti pada deployment produksi)
+ASMERANDA_JWT_SECRET=rahasia-kunci-jwt-yang-panjang-dan-acak-2026
+
+# Masa berlaku token JWT (dalam menit, default: 1440 = 24 jam)
+ASMERANDA_JWT_EXPIRE_MINUTES=1440
+```
+
+- **Mode Standar / Dev**: `ASMERANDA_REQUIRE_AUTH=false` (Autentikasi opsional untuk mempermudah automated unit testing).
+- **Mode Produksi / Strict**: `ASMERANDA_REQUIRE_AUTH=true` atau `ASMERANDA_PRODUCTION_MODE=true` (Seluruh endpoint wajib menyertakan token `Bearer <jwt_token>`).
 
 ---
 
@@ -256,6 +297,7 @@ asmeranda-modular/
 │   └── requirements-backend.txt # Backend runtime dependencies
 ├── frontend/                 # Source code Frontend (Next.js 14 App Router)
 │   ├── app/                  # Next.js pages & routes
+│   │   ├── login/            # Halaman login & otentikasi JWT
 │   │   ├── data-upload/      # Upload data
 │   │   ├── eda/              # Eksplorasi data
 │   │   ├── preprocessing/    # Preprocessing & Feature selection
@@ -267,8 +309,8 @@ asmeranda-modular/
 │   │   ├── clustering/       # Clustering analysis
 │   │   ├── timeseries/       # Time series & forecasting
 │   │   └── advanced-ml/      # Advanced ML suite
-│   ├── components/           # UI Components (Sidebar, Navbar, dll)
-│   ├── lib/                  # Store (Zustand), API client, i18n
+│   ├── components/           # UI Components (Sidebar, AuthGuard, MainLayout)
+│   ├── lib/                  # Store (Workflow & Auth Zustand), API client, i18n
 │   ├── Dockerfile            # Container definition untuk frontend
 │   └── package.json          # Node dependencies & scripts
 ├── nginx/                    # Konfigurasi reverse proxy Nginx

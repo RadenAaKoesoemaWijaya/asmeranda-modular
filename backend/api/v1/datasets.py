@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Request
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -20,6 +20,7 @@ from backend.services import dataset_service
 from backend.core.config import settings
 from backend.core.security_audit import audit_logger
 from backend.core.security_utils import input_sanitizer
+from backend.core.auth import UserInDB, UserRole, auth_required
 
 logger = logging.getLogger("asmeranda.api.datasets")
 router = APIRouter()
@@ -40,7 +41,9 @@ ALLOWED_EXTENSIONS = {'.csv', '.xlsx', '.xls', '.parquet', '.json', '.tsv', '.tx
 
 
 @router.get("", response_model=DatasetListResponse)
-def list_datasets() -> DatasetListResponse:
+def list_datasets(
+    _user: UserInDB = Depends(auth_required())
+) -> DatasetListResponse:
     """List semua dataset yang sudah di-upload."""
     items = dataset_service.list_datasets()
     return DatasetListResponse(datasets=items, total=len(items))
@@ -48,7 +51,11 @@ def list_datasets() -> DatasetListResponse:
 
 @router.post("", response_model=DatasetUploadResponse)
 @limiter.limit("10/minute")  # Limit to 10 uploads per minute per IP
-async def upload_dataset(request: Request, file: UploadFile = File(...)) -> DatasetUploadResponse:
+async def upload_dataset(
+    request: Request,
+    file: UploadFile = File(...),
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> DatasetUploadResponse:
     """
     Upload file dataset (CSV/XLSX/Parquet/JSON/TSV).
     File disimpan ke ``settings.data_dir/{dataset_id}.parquet``.
@@ -225,7 +232,10 @@ async def upload_dataset(request: Request, file: UploadFile = File(...)) -> Data
 
 
 @router.get("/{dataset_id}", response_model=DatasetMetadata)
-def get_dataset(dataset_id: str) -> DatasetMetadata:
+def get_dataset(
+    dataset_id: str,
+    _user: UserInDB = Depends(auth_required()),
+) -> DatasetMetadata:
     """Ambil metadata dataset (tidak termasuk isi)."""
     meta = dataset_service.get_metadata(dataset_id)
     if meta is None:
@@ -234,7 +244,10 @@ def get_dataset(dataset_id: str) -> DatasetMetadata:
 
 
 @router.delete("/{dataset_id}")
-def delete_dataset(dataset_id: str):
+def delete_dataset(
+    dataset_id: str,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN)),
+):
     """Hapus dataset."""
     ok = dataset_service.delete_dataset(dataset_id)
     if not ok:

@@ -6,10 +6,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.services import interpretation_service
+from backend.core.auth import UserInDB, UserRole, auth_required
 
 logger = logging.getLogger("asmeranda.api.interpretation")
 router = APIRouter()
@@ -29,7 +30,10 @@ class LimeRequest(BaseModel):
 
 
 @router.post("/shap")
-def run_shap(req: ShapRequest) -> Dict[str, Any]:
+def run_shap(
+    req: ShapRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Hitung SHAP values untuk model."""
     try:
         return interpretation_service.run_shap(
@@ -43,7 +47,10 @@ def run_shap(req: ShapRequest) -> Dict[str, Any]:
 
 
 @router.post("/lime")
-def run_lime(req: LimeRequest) -> Dict[str, Any]:
+def run_lime(
+    req: LimeRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Hitung LIME explanation untuk satu instance."""
     try:
         return interpretation_service.run_lime(

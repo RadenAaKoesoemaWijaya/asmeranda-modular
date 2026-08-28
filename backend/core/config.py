@@ -105,6 +105,11 @@ def _build_settings():
             # Production safety checks
             production_mode: bool = False
 
+            # Authentication enforcement
+            # Set ASMERANDA_REQUIRE_AUTH=true to enforce JWT on all API endpoints.
+            # Default False agar test suite tidak rusak di dev mode.
+            require_auth: bool = False
+
             # Logging
             log_level: str = "INFO"
 
@@ -133,6 +138,7 @@ def _build_settings():
         jwt_expire_minutes: int = 1440
         api_keys: List[str] = field(default_factory=lambda: ["asmeranda-dev-api-key"])
         production_mode: bool = False
+        require_auth: bool = False
         log_level: str = "INFO"
 
     return Settings()

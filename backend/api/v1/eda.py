@@ -9,11 +9,12 @@ from typing import List
 import numpy as np
 import pandas as pd
 import polars as pl
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.schemas.models import EdaCorrelationResponse, EdaSummaryResponse, RecommendationRequest, RecommendationResponse
 from backend.services import dataset_service
 from backend.services.recommendation_service import RecommendationService
+from backend.core.auth import UserInDB, auth_required
 
 logger = logging.getLogger("asmeranda.api.eda")
 router = APIRouter()
@@ -21,7 +22,10 @@ recommendation_service = RecommendationService()
 
 
 @router.get("/{dataset_id}/summary", response_model=EdaSummaryResponse)
-def summary(dataset_id: str) -> EdaSummaryResponse:
+def summary(
+    dataset_id: str,
+    _user: UserInDB = Depends(auth_required()),
+) -> EdaSummaryResponse:
     """Ringkasan dataset: shape, dtypes, describe, missing values."""
     try:
         result = dataset_service.summary(dataset_id)
@@ -39,6 +43,7 @@ def summary(dataset_id: str) -> EdaSummaryResponse:
 def correlation(
     dataset_id: str,
     columns: str = Query(default="", description="Comma-separated column names; kosong = semua numerik"),
+    _user: UserInDB = Depends(auth_required()),
 ) -> EdaCorrelationResponse:
     """Matriks korelasi Pearson antar kolom numerik."""
     try:
@@ -78,6 +83,7 @@ def paginated_data(
     dataset_id: str,
     page: int = Query(1, ge=1, description="Nomor halaman"),
     size: int = Query(50, ge=1, le=1000, description="Jumlah baris per halaman"),
+    _user: UserInDB = Depends(auth_required()),
 ):
     """Ambil sebagian raw data (server-side pagination)"""
     try:
@@ -94,7 +100,10 @@ def paginated_data(
 
 # TEMPORARY: Recommendations endpoint added here for immediate functionality
 @router.post("/analyze", response_model=RecommendationResponse)
-def analyze_dataset(config: RecommendationRequest) -> RecommendationResponse:
+def analyze_dataset(
+    config: RecommendationRequest,
+    _user: UserInDB = Depends(auth_required()),
+) -> RecommendationResponse:
     """Analyze dataset and provide AI-powered recommendations."""
     try:
         data = dataset_service.get_dataset(config.dataset_id)

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -27,6 +27,7 @@ from backend.services import training_service, evaluation_service
 from backend.services.optimization_service import OptimizationService
 from backend.core.config import settings
 from backend.core.security_audit import audit_logger
+from backend.core.auth import UserInDB, UserRole, auth_required
 from core.state import get_state
 
 logger = logging.getLogger("asmeranda.api.training")
@@ -135,7 +136,11 @@ def _train_model_background(
 
 @router.post("/start", response_model=TrainingResponse)
 @limiter.limit("30/minute")
-def start_training(request: Request, config: TrainingConfig) -> TrainingResponse:
+def start_training(
+    request: Request,
+    config: TrainingConfig,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> TrainingResponse:
     """Latih model berdasarkan state hasil preprocessing."""
     client_ip = request.client.host if request.client else "unknown"
     
@@ -284,13 +289,18 @@ def start_training(request: Request, config: TrainingConfig) -> TrainingResponse
 
 
 @router.get("/jobs")
-def list_training_jobs() -> Dict[str, Any]:
+def list_training_jobs(
+    _user: UserInDB = Depends(auth_required()),
+) -> Dict[str, Any]:
     """List semua training job beserta statusnya."""
     return {"jobs": list(_TRAINING_JOBS.values()), "total": len(_TRAINING_JOBS)}
 
 
 @router.get("/jobs/{job_id}")
-def get_training_job(job_id: str) -> Dict[str, Any]:
+def get_training_job(
+    job_id: str,
+    _user: UserInDB = Depends(auth_required()),
+) -> Dict[str, Any]:
     """Cek status spesifik training job."""
     job = _TRAINING_JOBS.get(job_id)
     if job is None:
@@ -299,13 +309,18 @@ def get_training_job(job_id: str) -> Dict[str, Any]:
 
 
 @router.get("/models")
-def list_models() -> Dict[str, Any]:
+def list_models(
+    _user: UserInDB = Depends(auth_required()),
+) -> Dict[str, Any]:
     """List semua model yang sudah dilatih."""
     return training_service.list_models()
 
 
 @router.get("/models/{model_id}")
-def get_model(model_id: str) -> Dict[str, Any]:
+def get_model(
+    model_id: str,
+    _user: UserInDB = Depends(auth_required()),
+) -> Dict[str, Any]:
     meta = training_service.get_metadata(model_id)
     if meta is None:
         raise HTTPException(status_code=404, detail=f"Model {model_id} tidak ditemukan")
@@ -313,7 +328,10 @@ def get_model(model_id: str) -> Dict[str, Any]:
 
 
 @router.delete("/models/{model_id}")
-def delete_model(model_id: str):
+def delete_model(
+    model_id: str,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN)),
+):
     ok = training_service.delete_model(model_id)
     if not ok:
         raise HTTPException(status_code=404, detail=f"Model {model_id} tidak ditemukan")
@@ -321,7 +339,10 @@ def delete_model(model_id: str):
 
 
 @router.get("/models/{model_id}/download")
-def download_model(model_id: str):
+def download_model(
+    model_id: str,
+    _user: UserInDB = Depends(auth_required()),
+):
     """Download trained model sebagai .pkl file."""
     model_dir = Path(settings.data_dir) / "models"
     model_path = model_dir / f"{model_id}.pkl"
@@ -337,7 +358,10 @@ def download_model(model_id: str):
 
 
 @router.post("/models/upload")
-async def upload_model(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def upload_model(
+    file: UploadFile = File(...),
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Upload dan daftarkan file model .pkl eksternal untuk deteksi/inferensi."""
     if not file.filename.endswith(".pkl") and not file.filename.endswith(".pickle"):
         raise HTTPException(status_code=400, detail="Format file harus berformat .pkl atau .pickle")
@@ -356,7 +380,9 @@ async def upload_model(file: UploadFile = File(...)) -> Dict[str, Any]:
 # TEMPORARY: Optimization endpoints added here for immediate functionality
 @router.post("/optimize", response_model=OptimizationResponse)
 def optimize_hyperparameters(
-    config: OptimizationConfig, background_tasks: BackgroundTasks
+    config: OptimizationConfig,
+    background_tasks: BackgroundTasks,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
 ) -> OptimizationResponse:
     """Perform hyperparameter optimization (async background task)."""
     try:
@@ -404,7 +430,10 @@ def optimize_hyperparameters(
 
 
 @router.post("/optimize-sync", response_model=OptimizationResponse)
-def optimize_hyperparameters_sync(config: OptimizationConfig) -> OptimizationResponse:
+def optimize_hyperparameters_sync(
+    config: OptimizationConfig,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> OptimizationResponse:
     """Perform hyperparameter optimization (synchronous, for smaller datasets)."""
     try:
         state = get_state(config.state_id)
@@ -529,7 +558,11 @@ def _optimization_background(
 
 
 @router.post("/models/{model_id}/predict", response_model=PredictionResponse)
-def predict_with_model(model_id: str, request: PredictionRequest):
+def predict_with_model(
+    model_id: str,
+    request: PredictionRequest,
+    _user: UserInDB = Depends(auth_required()),
+):
     """Gunakan trained model untuk prediksi data baru."""
     # Load model
     model_data = training_service.load_model(model_id)
@@ -590,7 +623,11 @@ def predict_with_model(model_id: str, request: PredictionRequest):
 
 
 @router.post("/models/{model_id}/predict-file")
-async def predict_with_file(model_id: str, file: UploadFile = File(...)) -> Dict[str, Any]:
+async def predict_with_file(
+    model_id: str,
+    file: UploadFile = File(...),
+    _user: UserInDB = Depends(auth_required()),
+) -> Dict[str, Any]:
     """Prediksi batch langsung dengan mengunggah file CSV atau Excel data baru."""
     model_data = training_service.load_model(model_id)
     if model_data is None:
@@ -662,7 +699,10 @@ async def predict_with_file(model_id: str, file: UploadFile = File(...)) -> Dict
 
 
 @router.post("/evaluate")
-def evaluate_with_state(config: EvaluationConfig):
+def evaluate_with_state(
+    config: EvaluationConfig,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+):
     """Evaluate model using state data (requires state_id in config)."""
     state_id = getattr(config, 'state_id', None)
     model_id = getattr(config, 'model_id', None)
@@ -713,7 +753,10 @@ def evaluate_with_state(config: EvaluationConfig):
 
 
 @router.post("/learning-curve")
-def generate_learning_curve(request: LearningCurveRequest):
+def generate_learning_curve(
+    request: LearningCurveRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+):
     """Generate learning curve for a trained model."""
     try:
         state = get_state(request.state_id)
@@ -761,7 +804,10 @@ def generate_learning_curve(request: LearningCurveRequest):
 
 
 @router.post("/compare")
-def compare_models(request: ModelComparisonRequest):
+def compare_models(
+    request: ModelComparisonRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+):
     """Compare multiple models and return performance ranking."""
     try:
         state = get_state(request.state_id)

@@ -8,11 +8,12 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.services.advanced_ml_service import AdvancedMLService
 from backend.services.utilities_service import UtilitiesService
+from backend.core.auth import UserInDB, UserRole, auth_required
 from core.state import get_state
 
 logger = logging.getLogger("asmeranda.api.advanced_ml")
@@ -110,7 +111,10 @@ class DataValidationRequest(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────
 @router.post("/umap")
-def umap_dimensionality_reduction(request: UMAPRequest) -> Dict[str, Any]:
+def umap_dimensionality_reduction(
+    request: UMAPRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Perform UMAP / PCA / t-SNE dimensionality reduction."""
     try:
         data, targets, err = _get_dataframe_and_targets(request.state_id)
@@ -147,7 +151,10 @@ def umap_dimensionality_reduction(request: UMAPRequest) -> Dict[str, Any]:
 
 
 @router.post("/hdbscan")
-def hdbscan_clustering(request: HDBSCANRequest) -> Dict[str, Any]:
+def hdbscan_clustering(
+    request: HDBSCANRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Perform HDBSCAN clustering with metrics and 2D visual projection."""
     try:
         data, _, err = _get_dataframe_and_targets(request.state_id)
@@ -168,7 +175,10 @@ def hdbscan_clustering(request: HDBSCANRequest) -> Dict[str, Any]:
 
 
 @router.post("/anomaly-detection")
-def anomaly_detection(request: AnomalyDetectionRequest) -> Dict[str, Any]:
+def anomaly_detection(
+    request: AnomalyDetectionRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Perform anomaly detection using Isolation Forest or One-Class SVM."""
     try:
         data, _, err = _get_dataframe_and_targets(request.state_id)
@@ -195,7 +205,10 @@ def anomaly_detection(request: AnomalyDetectionRequest) -> Dict[str, Any]:
 
 
 @router.post("/forecast")
-def forecast(request: ForecastingRequest) -> Dict[str, Any]:
+def forecast(
+    request: ForecastingRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Perform time series forecasting."""
     try:
         data, _, err = _get_dataframe_and_targets(request.state_id)
@@ -229,7 +242,10 @@ def forecast(request: ForecastingRequest) -> Dict[str, Any]:
 
 
 @router.post("/handle-missing-values")
-def handle_missing_values(request: MissingValueRequest) -> Dict[str, Any]:
+def handle_missing_values(
+    request: MissingValueRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Handle missing values in the dataset."""
     try:
         data, _, err = _get_dataframe_and_targets(request.state_id)
@@ -264,7 +280,10 @@ def handle_missing_values(request: MissingValueRequest) -> Dict[str, Any]:
 
 
 @router.post("/detect-outliers")
-def detect_outliers(request: OutlierDetectionRequest) -> Dict[str, Any]:
+def detect_outliers(
+    request: OutlierDetectionRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Detect outliers in the dataset."""
     try:
         data, _, err = _get_dataframe_and_targets(request.state_id)
@@ -285,7 +304,10 @@ def detect_outliers(request: OutlierDetectionRequest) -> Dict[str, Any]:
 
 
 @router.post("/validate-data")
-def validate_data(request: DataValidationRequest) -> Dict[str, Any]:
+def validate_data(
+    request: DataValidationRequest,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> Dict[str, Any]:
     """Validate data against constraints."""
     try:
         data, _, err = _get_dataframe_and_targets(request.state_id)
@@ -306,7 +328,10 @@ def validate_data(request: DataValidationRequest) -> Dict[str, Any]:
 
 
 @router.get("/columns/{state_id}")
-def get_columns(state_id: str) -> Dict[str, Any]:
+def get_columns(
+    state_id: str,
+    _user: UserInDB = Depends(auth_required()),
+) -> Dict[str, Any]:
     """Get available columns and types for a state."""
     try:
         data, _, err = _get_dataframe_and_targets(state_id)

@@ -6,11 +6,12 @@ from __future__ import annotations
 import logging
 import pandas as pd
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.schemas.models import PreprocessingConfig, PreprocessingResponse, ClusteringConfig, ClusteringResponse
 from backend.services import preprocessing_service
 from backend.services.clustering_service import ClusteringService
+from backend.core.auth import UserInDB, UserRole, auth_required
 from core.state import get_state
 
 logger = logging.getLogger("asmeranda.api.preprocessing")
@@ -19,7 +20,10 @@ clustering_service = ClusteringService()
 
 
 @router.post("/run", response_model=PreprocessingResponse)
-def run_preprocessing(config: PreprocessingConfig) -> PreprocessingResponse:
+def run_preprocessing(
+    config: PreprocessingConfig,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> PreprocessingResponse:
     """Jalankan preprocessing sesuai konfigurasi."""
     try:
         result = preprocessing_service.run(config.dict())
@@ -45,7 +49,10 @@ def run_preprocessing(config: PreprocessingConfig) -> PreprocessingResponse:
 
 # TEMPORARY: Clustering endpoints added here for immediate functionality
 @router.post("/cluster", response_model=ClusteringResponse)
-def perform_clustering(config: ClusteringConfig) -> ClusteringResponse:
+def perform_clustering(
+    config: ClusteringConfig,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+) -> ClusteringResponse:
     """Perform clustering analysis on training data."""
     try:
         state = get_state(config.state_id)
@@ -92,7 +99,10 @@ def perform_clustering(config: ClusteringConfig) -> ClusteringResponse:
 
 
 @router.post("/optimal-k")
-def find_optimal_k(config: ClusteringConfig):
+def find_optimal_k(
+    config: ClusteringConfig,
+    _user: UserInDB = Depends(auth_required(UserRole.ADMIN, UserRole.ANALYST)),
+):
     """Find optimal number of clusters using elbow and silhouette methods."""
     try:
         state = get_state(config.state_id)

@@ -6,16 +6,22 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.services import timeseries_service
+from backend.core.auth import UserInDB, auth_required
 
 logger = logging.getLogger("asmeranda.api.timeseries")
 router = APIRouter()
 
 
 @router.get("/{dataset_id}/detect")
-def detect(dataset_id: str, target_column: Optional[str] = None, date_column: Optional[str] = None):
+def detect(
+    dataset_id: str,
+    target_column: Optional[str] = None,
+    date_column: Optional[str] = None,
+    _user: UserInDB = Depends(auth_required()),
+):
     """Analisis awal: stationarity, anomaly count, summary stats."""
     try:
         return timeseries_service.detect_timeseries(dataset_id, target_column, date_column)
@@ -31,6 +37,7 @@ def forecast(
     horizon: int = Query(default=10, ge=1, le=500),
     method: str = Query(default="naive", pattern="^(naive|drift|mean)$"),
     date_column: Optional[str] = None,
+    _user: UserInDB = Depends(auth_required()),
 ):
     """Forecast sederhana (naive / drift / mean)."""
     try:
@@ -51,6 +58,7 @@ def anomalies(
     dataset_id: str,
     target_column: str,
     contamination: float = Query(default=0.05, ge=0.001, le=0.5),
+    _user: UserInDB = Depends(auth_required()),
 ):
     """Deteksi anomali dengan IsolationForest."""
     try:
