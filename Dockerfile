@@ -29,13 +29,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code
 COPY . /app
 
-# Create necessary directories
-RUN mkdir -p /app/data /app/models /app/uploads /app/logs
+# Create necessary directories and non-root appuser
+RUN mkdir -p /app/data /app/models /app/uploads /app/logs \
+    && groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser \
+    && chown -R appuser:appuser /app
 
 EXPOSE 8000
 
 ENV ASMERANDA_HOST=0.0.0.0 \
     ASMERANDA_PORT=8000
+
+USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \

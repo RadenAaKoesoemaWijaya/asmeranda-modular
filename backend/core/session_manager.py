@@ -14,8 +14,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from pathlib import Path
-import pickle
+import json
 import logging
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, Optional
+import secrets
 
 logger = logging.getLogger("asmeranda.security.session")
 
@@ -31,23 +35,40 @@ class SessionManager:
         self._load_sessions()
     
     def _load_sessions(self):
-        """Load existing sessions from disk."""
+        """Load existing sessions from disk using secure JSON."""
         try:
-            session_file = self.storage_dir / "sessions.pkl"
+            session_file = self.storage_dir / "sessions.json"
             if session_file.exists():
-                with open(session_file, "rb") as f:
-                    self._sessions = pickle.load(f)
+                with open(session_file, "r", encoding="utf-8") as f:
+                    raw_sessions = json.load(f)
+                    for sid, sdata in raw_sessions.items():
+                        # Parse ISO datetimes
+                        if "created_at" in sdata and isinstance(sdata["created_at"], str):
+                            sdata["created_at"] = datetime.fromisoformat(sdata["created_at"])
+                        if "expires_at" in sdata and isinstance(sdata["expires_at"], str):
+                            sdata["expires_at"] = datetime.fromisoformat(sdata["expires_at"])
+                        if "last_activity" in sdata and isinstance(sdata["last_activity"], str):
+                            sdata["last_activity"] = datetime.fromisoformat(sdata["last_activity"])
+                        self._sessions[sid] = sdata
                 logger.info(f"Loaded {len(self._sessions)} sessions from disk")
         except Exception as e:
             logger.warning(f"Failed to load sessions: {e}")
             self._sessions = {}
     
     def _save_sessions(self):
-        """Save sessions to disk."""
+        """Save sessions to disk using secure JSON."""
         try:
-            session_file = self.storage_dir / "sessions.pkl"
-            with open(session_file, "wb") as f:
-                pickle.dump(self._sessions, f)
+            session_file = self.storage_dir / "sessions.json"
+            serializable = {}
+            for sid, sdata in self._sessions.items():
+                copy_s = dict(sdata)
+                for dt_key in ["created_at", "expires_at", "last_activity"]:
+                    if isinstance(copy_s.get(dt_key), datetime):
+                        copy_s[dt_key] = copy_s[dt_key].isoformat()
+                serializable[sid] = copy_s
+                
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump(serializable, f, indent=2)
         except Exception as e:
             logger.error(f"Failed to save sessions: {e}")
     

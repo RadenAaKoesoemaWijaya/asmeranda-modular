@@ -98,9 +98,11 @@ def _build_settings():
 
             # Security (JWT & API Keys)
             jwt_secret: str = default_secret
+            model_signing_key: Optional[str] = None
             jwt_algorithm: str = "HS256"
             jwt_expire_minutes: int = 60 * 24
             api_keys: List[str] = ["asmeranda-dev-api-key"]
+            database_url: Optional[str] = None
 
             # Production safety checks
             production_mode: bool = False
@@ -134,9 +136,11 @@ def _build_settings():
         max_upload_size_mb: int = 200
         max_request_size_bytes: int = 10 * 1024 * 1024
         jwt_secret: str = default_secret
+        model_signing_key: Optional[str] = None
         jwt_algorithm: str = "HS256"
         jwt_expire_minutes: int = 1440
         api_keys: List[str] = field(default_factory=lambda: ["asmeranda-dev-api-key"])
+        database_url: Optional[str] = None
         production_mode: bool = False
         require_auth: bool = False
         log_level: str = "INFO"

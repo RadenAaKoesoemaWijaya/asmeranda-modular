@@ -97,21 +97,65 @@ def _state_file_path(state_id: str) -> Path:
     return _STATE_DIR / f"{state_id}.json"
 
 
+_PARTITIONS_DIR = _STATE_DIR / "partitions"
+_PARTITIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _save_state_partitions(state_id: str, state: Dict[str, Any]) -> None:
+    """Save heavy DataFrame/Series partitions to disk (Parquet) for resilience across restarts."""
+    if not state_id or state_id == "_default":
+        return
+    try:
+        import pandas as pd
+        state_part_dir = _PARTITIONS_DIR / state_id
+        
+        for key in ["X_train", "y_train", "X_test", "y_test", "processed_data"]:
+            val = state.get(key)
+            if val is None:
+                continue
+            state_part_dir.mkdir(parents=True, exist_ok=True)
+            part_path = state_part_dir / f"{key}.parquet"
+            if isinstance(val, pd.DataFrame):
+                val.to_parquet(part_path, index=False)
+            elif isinstance(val, pd.Series):
+                val.to_frame().to_parquet(part_path, index=False)
+    except Exception as exc:
+        logger.debug(f"Partition save warning for {state_id}: {exc}")
+
+
+def _load_state_partitions(state_id: str, state: Dict[str, Any]) -> None:
+    """Load heavy DataFrame/Series partitions from disk if present."""
+    if not state_id or state_id == "_default":
+        return
+    try:
+        import pandas as pd
+        state_part_dir = _PARTITIONS_DIR / state_id
+        if not state_part_dir.exists():
+            return
+        
+        for key in ["X_train", "X_test", "processed_data"]:
+            if state.get(key) is None:
+                part_path = state_part_dir / f"{key}.parquet"
+                if part_path.exists():
+                    state[key] = pd.read_parquet(part_path)
+                    
+        for key in ["y_train", "y_test"]:
+            if state.get(key) is None:
+                part_path = state_part_dir / f"{key}.parquet"
+                if part_path.exists():
+                    df_y = pd.read_parquet(part_path)
+                    state[key] = df_y.iloc[:, 0]
+    except Exception as exc:
+        logger.debug(f"Partition load warning for {state_id}: {exc}")
+
+
 def _save_state_to_disk(state_id: str, state: Dict[str, Any]) -> None:
-    """Save state to disk for persistence across restarts (legacy — full scan).
-    
-    Gunakan _save_state_metadata_to_disk untuk performa lebih baik.
-    """
+    """Save state to disk for persistence across restarts."""
     _save_state_metadata_to_disk(state_id, state)
 
 
 def _save_state_metadata_to_disk(state_id: str, state: Dict[str, Any]) -> None:
-    """Simpan hanya metadata scalar ringan ke disk — skip objek berat (Fix #4).
-
-    Lebih efisien dari _save_state_to_disk karena:
-    - Tidak melakukan json.dumps per-key untuk deteksi serializability.
-    - Skip semua key yang diketahui berisi DataFrame/model besar.
-    """
+    """Simpan metadata scalar ringan ke disk dan simpan partisi dataframe."""
     try:
         serializable_state: Dict[str, Any] = {}
         for key, value in state.items():
@@ -133,6 +177,9 @@ def _save_state_metadata_to_disk(state_id: str, state: Dict[str, Any]) -> None:
         state_file = _state_file_path(state_id)
         with open(state_file, "w", encoding="utf-8") as f:
             json.dump(serializable_state, f, ensure_ascii=False)
+            
+        # Simpan partisi data tabular secara terpisah
+        _save_state_partitions(state_id, state)
     except Exception as exc:
         logger.warning(f"Failed to save state metadata {state_id} to disk: {exc}")
 
@@ -145,7 +192,11 @@ def _load_state_from_disk(state_id: str) -> Optional[Dict[str, Any]]:
             return None
         
         with open(state_file, encoding="utf-8") as f:
-            return json.load(f)
+            loaded_data = json.load(f)
+            if isinstance(loaded_data, dict):
+                _load_state_partitions(state_id, loaded_data)
+                return loaded_data
+            return None
     except Exception as exc:
         logger.warning(f"Failed to load state {state_id} from disk: {exc}")
         return None
@@ -193,12 +244,19 @@ def _cleanup_expired_states() -> int:
     removed = 0
     with _LOCK:
         # 1) Hapus state yang TTL-nya sudah habis
-        expired = [
-            sid for sid, s in _STATE_REGISTRY.items()
-            if sid != "_default"
-            and isinstance(s, dict)
-            and (now - s.get("_accessed_at", s.get("_created_at", now))) > _STATE_TTL_SECONDS
-        ]
+        expired = []
+        for sid, s in _STATE_REGISTRY.items():
+            if sid != "_default" and isinstance(s, dict):
+                accessed = s.get("_accessed_at")
+                if accessed is None:
+                    accessed = s.get("_created_at", now)
+                if accessed is not None:
+                    try:
+                        if (now - float(accessed)) > _STATE_TTL_SECONDS:
+                            expired.append(sid)
+                    except (ValueError, TypeError):
+                        pass
+
         for sid in expired:
             _STATE_REGISTRY.pop(sid, None)
             try:
@@ -212,7 +270,7 @@ def _cleanup_expired_states() -> int:
         while len(non_default) > _STATE_MAX_COUNT:
             oldest = min(
                 non_default,
-                key=lambda sid: _STATE_REGISTRY[sid].get("_accessed_at", 0),
+                key=lambda sid: _STATE_REGISTRY[sid].get("_accessed_at", 0) or 0,
             )
             _STATE_REGISTRY.pop(oldest, None)
             try:

@@ -11,6 +11,7 @@ Provides:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -26,9 +27,24 @@ from pydantic import BaseModel, Field
 try:
     from backend.core.config import settings
     from backend.core.security_audit import audit_logger
+    from backend.core.database import SessionLocal, init_db
+    from backend.core.models_db import UserModel
 except ImportError:
     from core.config import settings
     from core.security_audit import audit_logger
+    try:
+        from core.database import SessionLocal, init_db
+        from core.models_db import UserModel
+    except ImportError:
+        SessionLocal = None
+        UserModel = None
+
+# Initialize tables
+if 'init_db' in locals() and init_db is not None:
+    try:
+        init_db()
+    except Exception as _e:
+        logging.getLogger("asmeranda.security.auth").warning(f"Database auto-init warning: {_e}")
 
 logger = logging.getLogger("asmeranda.security.auth")
 
@@ -160,49 +176,137 @@ def decode_access_token(token: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Simple InMemory/File User Store
+# Database-Backed User Store with Local Cache
 # ---------------------------------------------------------------------------
 class UserStore:
-    """Thread-safe user storage with default admin."""
+    """Thread-safe persistent user storage with database backing."""
     def __init__(self):
-        self._users: Dict[str, UserInDB] = {}
+        self._users_cache: Dict[str, UserInDB] = {}
         self._init_default_admin()
 
     def _init_default_admin(self):
-        """Create default admin if not exists."""
+        """Create default admin in database if not exists."""
         admin_username = "admin"
-        if admin_username not in self._users:
-            self._users[admin_username] = UserInDB(
+        admin_pwd = os.getenv("ASMERANDA_ADMIN_INITIAL_PASSWORD", "Admin@Asmeranda2026!")
+        
+        # Check database
+        if SessionLocal and UserModel:
+            try:
+                with SessionLocal() as db:
+                    existing = db.query(UserModel).filter(UserModel.username == admin_username).first()
+                    if not existing:
+                        admin_user = UserModel(
+                            id="usr-admin-01",
+                            username=admin_username,
+                            email="admin@asmeranda.ai",
+                            role=UserRole.ADMIN.value,
+                            hashed_password=get_password_hash(admin_pwd),
+                            created_at=datetime.now(timezone.utc).isoformat(),
+                            updated_at=datetime.now(timezone.utc).isoformat(),
+                            is_active=True
+                        )
+                        db.add(admin_user)
+                        db.commit()
+                        logger.info("Initialized default administrator account in persistent database.")
+            except Exception as e:
+                logger.warning(f"Database user init warning: {e}")
+
+        # Ensure fallback cache is populated
+        if admin_username not in self._users_cache:
+            self._users_cache[admin_username] = UserInDB(
                 id="usr-admin-01",
                 username=admin_username,
                 email="admin@asmeranda.ai",
                 role=UserRole.ADMIN,
-                hashed_password=get_password_hash("Admin@Asmeranda2026!"),
+                hashed_password=get_password_hash(admin_pwd),
                 created_at=datetime.now(timezone.utc).isoformat(),
                 is_active=True
             )
 
     def get_user_by_username(self, username: str) -> Optional[UserInDB]:
-        return self._users.get(username)
+        # Query DB first
+        if SessionLocal and UserModel:
+            try:
+                with SessionLocal() as db:
+                    u = db.query(UserModel).filter(UserModel.username == username).first()
+                    if u:
+                        user_obj = UserInDB(
+                            id=str(u.id),
+                            username=str(u.username),
+                            email=str(u.email) if u.email else None,
+                            role=UserRole(str(u.role)),
+                            hashed_password=str(u.hashed_password),
+                            created_at=str(u.created_at),
+                            is_active=bool(u.is_active)
+                        )
+                        self._users_cache[username] = user_obj
+                        return user_obj
+            except Exception as e:
+                logger.warning(f"DB read error for user {username}: {e}")
+
+        return self._users_cache.get(username)
 
     def create_user(self, user_in: UserCreate) -> UserInDB:
-        if user_in.username in self._users:
+        # Check uniqueness
+        if self.get_user_by_username(user_in.username) is not None:
             raise ValueError(f"Username '{user_in.username}' sudah digunakan.")
         
+        user_id = f"usr-{secrets.token_hex(6)}"
+        created_at_iso = datetime.now(timezone.utc).isoformat()
+        pwd_hash = get_password_hash(user_in.password)
+
+        if SessionLocal and UserModel:
+            try:
+                with SessionLocal() as db:
+                    db_user = UserModel(
+                        id=user_id,
+                        username=user_in.username,
+                        email=user_in.email,
+                        role=user_in.role.value if isinstance(user_in.role, UserRole) else str(user_in.role),
+                        hashed_password=pwd_hash,
+                        created_at=created_at_iso,
+                        updated_at=created_at_iso,
+                        is_active=user_in.is_active
+                    )
+                    db.add(db_user)
+                    db.commit()
+            except Exception as e:
+                logger.error(f"Failed to persist user in DB: {e}")
+
         user_db = UserInDB(
-            id=f"usr-{secrets.token_hex(6)}",
+            id=user_id,
             username=user_in.username,
             email=user_in.email,
             role=user_in.role,
-            hashed_password=get_password_hash(user_in.password),
-            created_at=datetime.now(timezone.utc).isoformat(),
-            is_active=True
+            hashed_password=pwd_hash,
+            created_at=created_at_iso,
+            is_active=user_in.is_active
         )
-        self._users[user_in.username] = user_db
+        self._users_cache[user_in.username] = user_db
         return user_db
 
     def list_users(self) -> List[UserInDB]:
-        return list(self._users.values())
+        if SessionLocal and UserModel:
+            try:
+                with SessionLocal() as db:
+                    users = db.query(UserModel).all()
+                    if users:
+                        return [
+                            UserInDB(
+                                id=str(u.id),
+                                username=str(u.username),
+                                email=str(u.email) if u.email else None,
+                                role=UserRole(str(u.role)),
+                                hashed_password=str(u.hashed_password),
+                                created_at=str(u.created_at),
+                                is_active=bool(u.is_active)
+                            )
+                            for u in users
+                        ]
+            except Exception as e:
+                logger.warning(f"DB list users error: {e}")
+
+        return list(self._users_cache.values())
 
 
 user_store = UserStore()
@@ -238,13 +342,14 @@ async def get_current_user(
         token = credentials.credentials
         try:
             payload = decode_access_token(token)
-            username: str = payload.get("sub") or payload.get("username")
-            if username is None:
+            raw_username = payload.get("sub") or payload.get("username")
+            if not raw_username:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token invalid: subject missing",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
+            username: str = str(raw_username)
             
             user = user_store.get_user_by_username(username)
             if user is None:

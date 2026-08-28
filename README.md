@@ -238,6 +238,131 @@ ASMERANDA_JWT_EXPIRE_MINUTES=1440
 
 ---
 
+## 🚀 Checklist Deployment ke Production Server
+
+Setelah pengujian lokal selesai, ikuti langkah-langkah berikut sebelum mendeploy ke server production.
+
+### Langkah 1 — Konfigurasi Kunci Keamanan (`.env`)
+
+Salin `.env.example` ke `.env` di server, lalu **wajib** ganti semua nilai kunci dengan nilai baru yang acak dan kuat:
+
+```bash
+# Salin template
+cp .env.example .env
+
+# Generate kunci acak kuat (jalankan masing-masing di terminal)
+python -c "import secrets; print(secrets.token_urlsafe(64))"  # untuk JWT_SECRET
+python -c "import secrets; print(secrets.token_urlsafe(64))"  # untuk MODEL_SIGNING_KEY
+```
+
+Edit `.env` dan isi nilai yang di-generate:
+
+```env
+# Kunci JWT untuk signing token autentikasi — WAJIB diganti!
+ASMERANDA_JWT_SECRET=<hasil-generate-1>
+
+# Kunci HMAC untuk verifikasi integritas file model .pkl — WAJIB diganti!
+ASMERANDA_MODEL_SIGNING_KEY=<hasil-generate-2>
+
+# Password awal administrator — WAJIB diganti setelah login pertama
+ASMERANDA_ADMIN_INITIAL_PASSWORD=<password-admin-kuat-baru>
+
+# URL database — gunakan PostgreSQL untuk production skala besar
+ASMERANDA_DATABASE_URL=sqlite:///./data/asmeranda.db
+# Atau PostgreSQL: postgresql+psycopg2://user:password@localhost:5432/asmeranda
+
+# Aktifkan mode produksi ketat
+ASMERANDA_PRODUCTION_MODE=true
+ASMERANDA_REQUIRE_AUTH=true
+```
+
+> ⚠️ **PENTING**: Jangan pernah menggunakan nilai kunci default dari `.env.example` di server production. Kunci yang sama berarti semua token dapat dipalsukan.
+
+---
+
+### Langkah 2 — Migrasi Tanda Tangan Model Legacy
+
+Jika terdapat file model `.pkl` yang dibuat sebelum fitur keamanan HMAC-SHA256 diterapkan, jalankan skrip migrasi **sekali** untuk menandatangani semua model lama:
+
+```bash
+# Jalankan dari root direktori project (setelah .env dikonfigurasi)
+python scripts/migrate_sign_legacy_models.py
+```
+
+Output yang diharapkan:
+```
+Migration complete — Signed: XX | Skipped: 0 | Failed: 0
+```
+
+- **Signed**: Jumlah model yang berhasil ditandatangani.
+- **Skipped**: Model yang sudah bertanda tangan valid (aman di-skip).
+- **Failed: 0**: Wajib nol — jika ada kegagalan, periksa izin file atau konfigurasi kunci.
+
+> 📌 **Catatan**: Skrip ini *idempoten* — aman dijalankan berulang kali. Setiap model sudah valid tidak akan diproses ulang.
+
+---
+
+### Langkah 3 — Aktifkan Mode Production Ketat
+
+Pastikan variabel berikut sudah diset di `.env` server:
+
+```env
+ASMERANDA_PRODUCTION_MODE=true   # Aktifkan semua validasi keamanan ketat
+ASMERANDA_REQUIRE_AUTH=true      # Semua endpoint API wajib token JWT
+ASMERANDA_DEBUG=false            # Sembunyikan stack trace dari respons API
+```
+
+Dengan `PRODUCTION_MODE=true`, sistem akan:
+- **Menolak** semua model `.pkl` yang tidak bertanda tangan valid (tidak ada fallback unsigned).
+- **Memvalidasi** CORS origins hanya dari domain yang terdaftar.
+- **Mencatat** seluruh aksi sensitif ke audit log database.
+
+---
+
+### Langkah 4 — Lindungi File `.env`
+
+File `.env` berisi rahasia kriptografis dan **tidak boleh masuk ke version control**. Pastikan:
+
+```bash
+# Verifikasi .env sudah ada di .gitignore
+grep ".env" .gitignore
+
+# Set izin file hanya bisa dibaca oleh user yang menjalankan aplikasi (Linux/macOS)
+chmod 600 .env
+
+# Windows: pastikan hanya akun service yang memiliki Read permission
+```
+
+File `.env` sudah tercantum di `.gitignore` secara default. Jangan hapus baris tersebut.
+
+---
+
+### Langkah 5 — Verifikasi Akhir Sebelum Go-Live
+
+Jalankan skrip verifikasi produksi untuk memastikan semua komponen keamanan berfungsi:
+
+```bash
+python final_production_verification.py
+```
+
+Pastikan output menunjukkan:
+```
+Ran 5 tests in X.XXXs
+OK
+```
+
+Semua 5 pengujian harus **PASS** sebelum layanan dinyatakan siap:
+
+| Test | Yang Diverifikasi |
+|---|---|
+| `test_01` | HMAC-SHA256 signing dan deteksi model yang dimanipulasi |
+| `test_02` | Persistensi user database (SQLite/PostgreSQL) + bcrypt |
+| `test_03` | JSON session storage dengan mekanisme expiry |
+| `test_04` | Resiliensi state Parquet antar restart server |
+| `test_05` | Lifecycle lengkap: train → sign → verify → load → delete |
+
+---
+
 ## 📊 Referensi Endpoint API Utama
 
 | Endpoint | Metode | Deskripsi |
@@ -290,11 +415,20 @@ asmeranda-modular/
 ├── backend/                  # Source code Backend (FastAPI)
 │   ├── api/v1/               # Endpoint REST API v1
 │   ├── core/                 # Auth, Security, Config, State Management
+│   │   ├── auth.py           # JWT auth, RBAC, UserStore (SQLite-backed)
+│   │   ├── config.py         # Konfigurasi terpusat via env vars
+│   │   ├── database.py       # SQLAlchemy engine & session factory
+│   │   ├── model_security.py # HMAC-SHA256 signing & verifikasi model .pkl
+│   │   ├── models_db.py      # ORM models: UserModel, AuditLogModel
+│   │   ├── session_manager.py# Secure JSON session storage + expiry
+│   │   └── state.py          # Bridge ke root core/state.py
 │   ├── services/             # Core ML, EDA, XAI, Preprocessing services
 │   ├── schemas/              # Pydantic schemas (request/response)
 │   ├── tests/                # Test suite komprehensif (Unit, Security, Integration)
-│   ├── Dockerfile            # Container definition untuk backend
+│   ├── Dockerfile            # Container definition untuk backend (non-root appuser)
 │   └── requirements-backend.txt # Backend runtime dependencies
+├── scripts/                  # Utilitas & skrip operasional
+│   └── migrate_sign_legacy_models.py # Migrasi batch-sign semua model .pkl lama
 ├── frontend/                 # Source code Frontend (Next.js 14 App Router)
 │   ├── app/                  # Next.js pages & routes
 │   │   ├── login/            # Halaman login & otentikasi JWT
@@ -315,6 +449,9 @@ asmeranda-modular/
 │   └── package.json          # Node dependencies & scripts
 ├── nginx/                    # Konfigurasi reverse proxy Nginx
 ├── data/                     # Direktori penyimpanan dataset & model (.pkl)
+│   ├── models/               # Artefak model terlatih (.pkl + .pkl.sig)
+│   ├── states/               # State persistence (JSON metadata + Parquet partitions)
+│   └── asmeranda.db          # Database SQLite persisten (user & audit log)
 ├── docker-compose.yml        # Multi-container orchestration (Opsi 1)
 ├── start_docker.bat          # 1-klik start Docker Desktop (Opsi 1)
 ├── stop_docker.bat           # 1-klik stop Docker Desktop (Opsi 1)
@@ -325,6 +462,9 @@ asmeranda-modular/
 ├── asmeranda.iss             # Inno Setup Windows installer script (Opsi 3)
 ├── build_installer.bat       # Builder Windows installer & ZIP (Opsi 3)
 ├── workflow_validator.py     # Validator alur transisi state ML
+├── final_production_verification.py # Suite verifikasi keamanan & resiliensi (5 tests)
+├── .env.example              # Template environment variables
+├── .env                      # Konfigurasi lokal (JANGAN di-commit ke Git!)
 ├── ARSITEKTUR ASMERANDA.md   # Dokumentasi arsitektur sistem lengkap
 └── README.md                 # Dokumentasi proyek
 ```

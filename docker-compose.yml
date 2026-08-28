@@ -15,8 +15,8 @@ services:
       - ASMERANDA_DATA_DIR=/app/data
       - ASMERANDA_LOG_LEVEL=INFO
       - ASMERANDA_MAX_UPLOAD_SIZE_MB=100
-      - ASMERANDA_ALLOWED_HOSTS=["*"]
-      - ASMERANDA_CORS_ORIGINS=["*"]
+      - ASMERANDA_ALLOWED_HOSTS=["localhost", "127.0.0.1", "backend", "asmeranda-backend", "frontend", "asmeranda-frontend", "nginx", "asmeranda-nginx"]
+      - ASMERANDA_CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost", "http://127.0.0.1", "http://frontend:3000"]
     volumes:
       - ./data:/app/data
       - ./backend:/app/backend

@@ -26,13 +26,17 @@ RUN pip install -r /tmp/requirements-backend.txt
 # Copy seluruh project source
 COPY . /app
 
-# Buat direktori data
-RUN mkdir -p /app/data /app/data/models /app/data/states /app/logs
+# Buat direktori data dan set hak akses untuk user non-root
+RUN mkdir -p /app/data /app/data/models /app/data/states /app/logs \
+    && groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser \
+    && chown -R appuser:appuser /app
 
 EXPOSE 8000
 
 ENV ASMERANDA_HOST=0.0.0.0 \
     ASMERANDA_PORT=8000
+
+USER appuser
 
 # Healthcheck internal
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

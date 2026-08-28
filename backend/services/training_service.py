@@ -7,13 +7,15 @@ endpoint) - hanya factory + persist. Model disimpan ke
 """
 from __future__ import annotations
 
+import logging
 import pickle
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator
 from sklearn.ensemble import (
     GradientBoostingClassifier,
     GradientBoostingRegressor,
@@ -48,6 +50,12 @@ from sklearn.svm import SVC, SVR
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 from backend.core.config import settings
+try:
+    from backend.core.model_security import sign_model_file, verify_model_integrity
+except ImportError:
+    from core.model_security import sign_model_file, verify_model_integrity
+
+logger = logging.getLogger("asmeranda.services.training")
 
 
 # Optional: framework tambahan
@@ -88,6 +96,9 @@ def _load_models_from_disk() -> None:
     for model_path in sorted(_MODEL_DIR.glob("*.pkl")):
         model_id = model_path.stem
         if model_id in _MODELS:
+            continue
+        is_valid, _ = verify_model_integrity(model_path, allow_legacy_unsigned=True)
+        if not is_valid:
             continue
         try:
             with open(model_path, "rb") as fh:
@@ -175,7 +186,10 @@ def _build_model(model_type: str, problem_type: str, hyperparams: Optional[Dict[
     if mt in ("knn", "kneighbors", "k_neighbors"):
         return (KNeighborsClassifier if is_clf else KNeighborsRegressor)(**hp)
     if mt in ("svm", "svc", "svr", "support_vector_machine"):
-        return (SVC if is_clf else SVR)(probability=is_clf, **hp)
+        if is_clf:
+            return SVC(probability=True, **hp)
+        else:
+            return SVR(**hp)
     if mt in ("xgboost", "xgb") and XGBOOST_AVAILABLE:
         return (XGBClassifier if is_clf else XGBRegressor)(random_state=42, **hp)
     if mt in ("lightgbm", "lgbm", "light_gbm") and LIGHTGBM_AVAILABLE:
@@ -355,6 +369,11 @@ def train(
             fh,
         )
 
+    try:
+        sign_model_file(path, metadata={"model_id": model_id, "model_type": model_type, "problem_type": problem_type})
+    except Exception as exc:
+        logger.warning(f"Could not create cryptographic signature for model {model_id}: {exc}")
+
     _MODELS[model_id] = {
         "model_id": model_id,
         "model_type": model_type,
@@ -386,6 +405,10 @@ def list_models() -> Dict[str, Dict[str, Any]]:
 def load_model(model_id: str):
     path = _MODEL_DIR / f"{model_id}.pkl"
     if not path.exists():
+        return None
+    is_valid, msg = verify_model_integrity(path, allow_legacy_unsigned=True)
+    if not is_valid:
+        logger.error(f"Cannot load tampered/untrusted model {model_id}: {msg}")
         return None
     with open(path, "rb") as fh:
         return pickle.load(fh)
@@ -448,6 +471,11 @@ def save_uploaded_model(file_bytes: bytes, original_filename: str = "uploaded_mo
     with open(path, "wb") as fh:
         pickle.dump(payload, fh)
 
+    try:
+        sign_model_file(path, metadata={"model_id": model_id, "model_type": model_type, "original_filename": original_filename})
+    except Exception as exc:
+        logger.warning(f"Could not sign uploaded model {model_id}: {exc}")
+
     _MODELS[model_id] = {
         "model_id": model_id,
         "model_type": model_type,
@@ -474,6 +502,7 @@ def save_uploaded_model(file_bytes: bytes, original_filename: str = "uploaded_mo
 
 def delete_model(model_id: str) -> bool:
     path = _MODEL_DIR / f"{model_id}.pkl"
+    sig_path = _MODEL_DIR / f"{model_id}.pkl.sig"
     existed = False
     if path.exists():
         try:
@@ -481,6 +510,11 @@ def delete_model(model_id: str) -> bool:
         except Exception:
             pass
         existed = True
+    if sig_path.exists():
+        try:
+            sig_path.unlink()
+        except Exception:
+            pass
     _MODELS.pop(model_id, None)
     return existed
 
