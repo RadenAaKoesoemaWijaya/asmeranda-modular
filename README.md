@@ -1,8 +1,8 @@
 # Asmeranda AI
 
-Platform machine learning modular berbasis enterprise untuk workflow data science *end-to-end*. Mulai dari upload dataset, eksplorasi data (EDA), preprocessing adaptif, feature selection, pelatihan model, optimasi hyperparameter, interpretasi model (Explainable AI: SHAP & LIME), hingga inferensi deteksi data baru dengan model yang telah di-download/diekspor — semua dalam satu platform terintegrasi dengan keamanan berbasis peran (RBAC).
+Platform machine learning modular berbasis enterprise untuk workflow data science *end-to-end*. Mulai dari upload dataset, eksplorasi data (EDA), preprocessing adaptif, feature selection (termasuk metaheuristik Genetic Algorithm), pelatihan model, optimasi hyperparameter, interpretasi model (Explainable AI: SHAP & LIME), hingga inferensi deteksi data baru dengan model yang telah di-download/diekspor — semua dalam satu platform terintegrasi dengan keamanan berbasis peran (RBAC).
 
-> 📘 **Dokumentasi Lengkap Arsitektur**: Silakan baca [`ARSITEKTUR ASMERANDA.md`](file:///c:/asmeranda-modular/ARSITEKTUR%20ASMERANDA.md) untuk rincian mendalam mengenai topologi sistem, alur data (*dataflow*), siklus hidup *state*, dan model keamanan.
+> 💡 **Arsitektur Modular Enterprise**: Asmeranda AI dibangun dengan pemisahan dependensi bersih antara Frontend Next.js 14 App Router, Backend FastAPI terdistribusi, engine komputasi Machine Learning berbasis Scikit-Learn/Optuna, serta penyimpanan persisten SQLite & Parquet dengan integritas kriptografis HMAC-SHA256.
 
 ---
 
@@ -60,11 +60,12 @@ graph LR
    - **Feature Scaling**: Standard Scaler, MinMax Scaler, Robust Scaler (kebal pencilan), Power Transformer, dan Quantile Transformer.
    - **Penanganan Ketidakseimbangan (Imbalance Dataset)**: SMOTE, ADASYN, Random Oversampling, dan Undersampling.
 
-3. **🎯 3. Feature Selection (Seleksi Fitur Cerdas)**:
-   - Metode **SelectKBest** (ANOVA F-Score / Mutual Information).
-   - Filter Korelasi multikolinieritas (*Correlation Thresholding*).
-   - Ambang Batas Variansi (*Variance Threshold*).
-   - *Recursive Feature Elimination* (RFE) berbasis model dengan percepatan paralel.
+3. **🎯 3. Feature Selection (Seleksi Fitur Cerdas & Metaheuristik)**:
+   - **Genetic Algorithm (GA) Metaheuristic Selection**: Pencarian subset fitur optimal di ruang kombinatorial $2^N$ menggunakan prinsip seleksi alam evolusioner (*binary chromosome representation*, *tournament selection*, *uniform crossover*, *adaptive bit-flip mutation*, dan *elitism*). Mengoptimalkan fungsi *multi-objective fitness* (performa prediktif model via 3-Fold Cross-Validation + penalti parsimoni ukuran subset) dengan mekanisme *early stopping* dan streaming pemantauan generasi *real-time* via WebSocket ke antarmuka pengguna.
+   - **Recursive Feature Elimination (RFE)**: Eliminasi fitur rekursif berbasis model dengan percepatan paralel untuk menyeleksi subset berbobot kontribusi tertinggi.
+   - **SelectKBest (Univariate Ranking)**: Pemeringkatan univariat berbasis statistik ANOVA F-Score (klasifikasi/regresi) dan Mutual Information.
+   - **Filter Korelasi Multikolinieritas**: Deteksi dan eliminasi pasangan fitur berlebih berkorelasi tinggi (*multicollinearity reduction*).
+   - **Ambang Batas Variansi (Variance Threshold)**: Pemangkasan fitur konstan atau quasi-konstan dengan variansi mendekati nol.
 
 4. **🧠 4. Pelatihan Model Machine Learning Supervised**:
    - **12+ Algoritma Lengkap**: RandomForest, GradientBoosting, XGBoost, LightGBM, CatBoost, SVM (SVC/SVR), DecisionTree, K-Nearest Neighbors (KNN), Logistic/Linear Regression, Voting Ensemble (Hard/Soft), dan Stacking Ensemble.
@@ -373,7 +374,7 @@ Semua 5 pengujian harus **PASS** sebelum layanan dinyatakan siap:
 | `/api/v1/datasets` | `POST` | Upload dataset (CSV, XLSX, Parquet, JSON) |
 | `/api/v1/datasets` | `GET` | Daftar semua dataset yang tersimpan |
 | `/api/v1/eda/{id}/summary` | `GET` | Statistik deskriptif & analisis missing values |
-| `/api/v1/preprocessing/run` | `POST` | Eksekusi pipeline preprocessing & feature selection |
+| `/api/v1/preprocessing/run` | `POST` | Eksekusi pipeline preprocessing & seleksi fitur (None, Variance, Correlation, SelectKBest, RFE, Genetic Algorithm) |
 | `/api/v1/clustering/cluster` | `POST` | Analisis clustering unsupervised |
 | `/api/v1/clustering/optimal-k`| `POST` | Analisis Elbow & Silhouette Score |
 | `/api/v1/optimization/optimize` | `POST` | Hyperparameter tuning dengan Optuna Bayesian search |
@@ -391,16 +392,51 @@ Semua 5 pengujian harus **PASS** sebelum layanan dinyatakan siap:
 
 ---
 
+### 🧬 Panduan Konfigurasi Seleksi Fitur Metaheuristik (Genetic Algorithm)
+
+Endpoint `/api/v1/preprocessing/run` dan antarmuka `/preprocessing` mendukung seleksi subset fitur otomatis menggunakan Genetic Algorithm:
+
+```json
+{
+  "dataset_id": "dataset_id_anda",
+  "target_column": "target",
+  "problem_type": "Classification",
+  "feature_selection": {
+    "method": "genetic",
+    "population_size": 30,
+    "generations": 20,
+    "crossover_rate": 0.8,
+    "mutation_rate": null,
+    "parsimony_weight": 0.1,
+    "early_stopping_rounds": 5,
+    "max_features": 10
+  }
+}
+```
+
+- **`population_size`** (default: 30): Jumlah kromosom/kandidat subset fitur dalam satu populasi.
+- **`generations`** (default: 20): Jumlah siklus generasi evolusi.
+- **`crossover_rate`** (default: 0.8): Rasio probabilitas persilangan acak antar kromosom induk unggul.
+- **`mutation_rate`** (default: `null` -> auto $1/N$): Probabilitas mutasi pembalikan bit per fitur.
+- **`parsimony_weight`** (default: 0.1): Pembobotan penalti terhadap rasio fitur terpilih ($\text{Fitness} = \text{Score} - \alpha \times \frac{K}{N}$), mencegah *overfitting* dan menghasilkan model yang lebih efisien.
+- **`early_stopping_rounds`** (default: 5): Penghentian otomatis jika *best fitness* tidak mengalami kenaikan selama $n$ ronde berturut-turut.
+- **Streaming Progres Real-Time**: Status proses GA dipancarkan langsung melalui WebSocket `/api/v1/ws/{dataset_id}` menampilkan persentase progres, nomor generasi, skor *fitness*, dan jumlah fitur terpilih.
+
+---
+
 ## 🧪 Testing & Jaminan Kualitas (QA Verification)
 
-Sistem telah diuji secara komprehensif dengan **131 Automated Tests** yang mencakup pengujian unit, integrasi, keamanan, dan end-to-end lifecycle.
+Sistem telah diuji secara komprehensif dengan **144 Automated Tests** yang mencakup pengujian unit, integrasi, keamanan kriptografis, dan end-to-end lifecycle.
 
 ```bash
 # Menjalankan seluruh test suite backend (Unit, Integration, Security, E2E)
 python -m pytest backend/tests/ -v --no-cov
 
+# Menjalankan unit test Genetic Feature Selection
+python -m pytest backend/tests/unit/test_genetic_feature_selection.py -v --no-cov
+
 # Menjalankan test validator alur kerja
-python -m pytest backend/tests/unit/test_workflow_validator.py -v
+python -m pytest backend/tests/unit/test_workflow_validator.py -v --no-cov
 
 # Menjalankan verifikasi kompilasi frontend Next.js
 cd frontend && npm run build
@@ -423,8 +459,16 @@ asmeranda-modular/
 │   │   ├── session_manager.py# Secure JSON session storage + expiry
 │   │   └── state.py          # Bridge ke root core/state.py
 │   ├── services/             # Core ML, EDA, XAI, Preprocessing services
+│   │   ├── dataset_service.py
+│   │   ├── preprocessing_service.py
+│   │   ├── genetic_selection.py # Metaheuristic Genetic Algorithm Feature Selector
+│   │   ├── training_service.py
+│   │   └── interpretation_service.py
 │   ├── schemas/              # Pydantic schemas (request/response)
-│   ├── tests/                # Test suite komprehensif (Unit, Security, Integration)
+│   ├── tests/                # Test suite komprehensif (144 tests: Unit, Security, Integration)
+│   │   ├── unit/             # Core state, Data utils, Genetic selection, Workflow validator
+│   │   ├── security/         # HMAC signing, Auth, Session, Parquet resilience
+│   │   └── integration/      # API endpoints & E2E lifecycle
 │   ├── Dockerfile            # Container definition untuk backend (non-root appuser)
 │   └── requirements-backend.txt # Backend runtime dependencies
 ├── scripts/                  # Utilitas & skrip operasional
@@ -434,7 +478,7 @@ asmeranda-modular/
 │   │   ├── login/            # Halaman login & otentikasi JWT
 │   │   ├── data-upload/      # Upload data
 │   │   ├── eda/              # Eksplorasi data
-│   │   ├── preprocessing/    # Preprocessing & Feature selection
+│   │   ├── preprocessing/    # Preprocessing & GA / Standard Feature Selection
 │   │   ├── optimization/     # Optimasi hiperparameter
 │   │   ├── training/         # Pelatihan model & benchmark
 │   │   ├── shap/             # Interpretasi SHAP
@@ -465,8 +509,7 @@ asmeranda-modular/
 ├── final_production_verification.py # Suite verifikasi keamanan & resiliensi (5 tests)
 ├── .env.example              # Template environment variables
 ├── .env                      # Konfigurasi lokal (JANGAN di-commit ke Git!)
-├── ARSITEKTUR ASMERANDA.md   # Dokumentasi arsitektur sistem lengkap
-└── README.md                 # Dokumentasi proyek
+└── README.md                 # Dokumentasi proyek lengkap
 ```
 
 ---

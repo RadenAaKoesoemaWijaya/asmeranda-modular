@@ -136,8 +136,11 @@ def _feature_selection(
     method: str,
     max_features: int,
     threshold: float,
+    problem_type: Optional[str] = "Classification",
+    extra_params: Optional[Dict[str, Any]] = None,
+    dataset_id: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, List[str], Dict[str, Any]]:
-    """Feature selection menggunakan berbagai metode."""
+    """Feature selection menggunakan berbagai metode, termasuk Genetic Algorithm."""
     info: Dict[str, Any] = {"method": method, "selected_features": []}
     
     if method == "none" or not method:
@@ -203,9 +206,60 @@ def _feature_selection(
         X_selected = pd.DataFrame(X_selected, columns=selected_features, index=X.index)
         info["selected_features"] = selected_features
         return X_selected, selected_features, info
+
+    elif method == "genetic":
+        if y is None or X_numeric.shape[1] <= 1:
+            return X, X.columns.tolist(), info
+
+        try:
+            from backend.services.genetic_selection import GeneticFeatureSelector
+        except ImportError:
+            try:
+                from services.genetic_selection import GeneticFeatureSelector
+            except ImportError:
+                return X, X.columns.tolist(), info
+
+        params = extra_params or {}
+        pop_size = int(params.get("population_size", 30))
+        generations = int(params.get("generations", 20))
+        crossover_rate = float(params.get("crossover_rate", 0.8))
+        mutation_rate = params.get("mutation_rate")
+        parsimony_weight = float(params.get("parsimony_weight", 0.1))
+        early_stopping = int(params.get("early_stopping_rounds", 5))
+        k_target = max_features if max_features > 0 else min(15, X_numeric.shape[1])
+
+        def _ga_cb(gen, total, score, n_sel):
+            if dataset_id:
+                pct = 70 + int((gen / total) * 5)
+                _try_broadcast(dataset_id, pct, f"GA generasi {gen}/{total} (score: {score:.3f}, {n_sel} fitur)...")
+
+        selector = GeneticFeatureSelector(
+            problem_type=problem_type or "Classification",
+            population_size=pop_size,
+            generations=generations,
+            crossover_rate=crossover_rate,
+            mutation_rate=mutation_rate,
+            max_features=k_target,
+            parsimony_weight=parsimony_weight,
+            early_stopping_rounds=early_stopping,
+            progress_callback=_ga_cb,
+        )
+        selector.fit(X_numeric, y)
+
+        selected_features = selector.best_features_
+        if not selected_features:
+            selected_features = X_numeric.columns.tolist()
+
+        X_selected = X[selected_features].copy()
+        info["selected_features"] = selected_features
+        info["ga_history"] = selector.history_
+        info["best_fitness"] = selector.best_score_
+        info["n_features_selected"] = len(selected_features)
+        return X_selected, selected_features, info
     
     # Default: return original
     return X, X.columns.tolist(), info
+
 
 
 def auto_configure_pipeline(df: pd.DataFrame, target_column: Optional[str] = None, problem_type: Optional[str] = None) -> Dict[str, Any]:
@@ -369,11 +423,10 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
     def _try_broadcast(d_id: str, progress: int, message: str):
         """Coba broadcast tanpa blocking."""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.ensure_future(_broadcast(d_id, progress, message))
-            else:
-                loop.run_until_complete(_broadcast(d_id, progress, message))
+            loop = asyncio.get_running_loop()
+            asyncio.ensure_future(_broadcast(d_id, progress, message))
+        except RuntimeError:
+            pass  # Tidak ada running event loop di thread sinkron ini
         except Exception:
             pass  # broadcast gagal tidak boleh menghentikan preprocessing
 
@@ -433,7 +486,14 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
         fs_max_features = fs_config.get("max_features", 10)
         fs_threshold = fs_config.get("threshold", 0.05)
         X, selected_features, fs_info = _feature_selection(
-            X, y, fs_method, fs_max_features, fs_threshold
+            X,
+            y,
+            fs_method,
+            fs_max_features,
+            fs_threshold,
+            problem_type=problem_type,
+            extra_params=fs_config,
+            dataset_id=dataset_id,
         )
         if fs_info.get("selected_features"):
             steps.append(f"feature_selection={fs_method} ({len(selected_features)} features)")
@@ -524,3 +584,8 @@ def run(config: Dict[str, Any]) -> Dict[str, Any]:
         "feature_selection_info": fs_info if fs_config else None,
         "imbalance_handling_info": imb_info if imb_config else None,
     }
+
+
+# Backward-compatible alias
+run_preprocessing = run
+

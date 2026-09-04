@@ -26,6 +26,8 @@ export default function PreprocessingPage() {
   const [featureSelectionMethod, setFeatureSelectionMethod] = useState("none");
   const [maxFeatures, setMaxFeatures] = useState(10);
   const [selectionThreshold, setSelectionThreshold] = useState(0.05);
+  const [gaPopulationSize, setGaPopulationSize] = useState(30);
+  const [gaGenerations, setGaGenerations] = useState(20);
   const [showFeatureSelection, setShowFeatureSelection] = useState(false);
   
   // Imbalance handling states
@@ -78,6 +80,8 @@ export default function PreprocessingPage() {
           method: featureSelectionMethod,
           max_features: Number(maxFeatures),
           threshold: Number(selectionThreshold),
+          population_size: Number(gaPopulationSize) || 30,
+          generations: Number(gaGenerations) || 20,
         } : null,
         imbalance_handling: (!isUnsupervised && showImbalanceHandling) ? {
           method: imbalanceMethod,
@@ -243,7 +247,7 @@ export default function PreprocessingPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
+              gridTemplateColumns: featureSelectionMethod === "genetic" ? "repeat(auto-fit, minmax(140px, 1fr))" : "1fr 1fr 1fr",
               gap: 12,
             }}
           >
@@ -259,6 +263,7 @@ export default function PreprocessingPage() {
                 <option value="correlation">Correlation Filter</option>
                 <option value="kbest">SelectKBest</option>
                 <option value="rfe">RFE (Recursive Elimination)</option>
+                <option value="genetic">Genetic Algorithm (Metaheuristic)</option>
               </select>
             </label>
 
@@ -274,18 +279,46 @@ export default function PreprocessingPage() {
               />
             </label>
 
-            <label>
-              Threshold
-              <input
-                type="number"
-                min="0.01"
-                max="1.0"
-                step="0.01"
-                value={selectionThreshold}
-                onChange={(e) => setSelectionThreshold(e.target.value)}
-                style={{ width: "100%" }}
-              />
-            </label>
+            {featureSelectionMethod === "genetic" ? (
+              <>
+                <label>
+                  Pop Size
+                  <input
+                    type="number"
+                    min="10"
+                    max="100"
+                    value={gaPopulationSize}
+                    onChange={(e) => setGaPopulationSize(e.target.value)}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+
+                <label>
+                  Generations
+                  <input
+                    type="number"
+                    min="5"
+                    max="50"
+                    value={gaGenerations}
+                    onChange={(e) => setGaGenerations(e.target.value)}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+              </>
+            ) : (
+              <label>
+                Threshold
+                <input
+                  type="number"
+                  min="0.01"
+                  max="1.0"
+                  step="0.01"
+                  value={selectionThreshold}
+                  onChange={(e) => setSelectionThreshold(e.target.value)}
+                  style={{ width: "100%" }}
+                />
+              </label>
+            )}
           </div>
         </div>
       )}
@@ -400,6 +433,12 @@ export default function PreprocessingPage() {
               <strong>Feature Selection:</strong> {result.feature_selection_info.method}
               {result.feature_selection_info.selected_features && (
                 <span> ({result.feature_selection_info.selected_features.length} fitur terpilih)</span>
+              )}
+              {result.feature_selection_info.best_fitness !== undefined && (
+                <span> | Best Fitness: {Number(result.feature_selection_info.best_fitness).toFixed(4)}</span>
+              )}
+              {result.feature_selection_info.ga_history && (
+                <span> | {result.feature_selection_info.ga_history.length} generasi dievaluasi</span>
               )}
             </div>
           )}

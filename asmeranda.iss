@@ -47,7 +47,6 @@ Source: "workflow_validator.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "deploy-docker-desktop.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "deploy-local.sh"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "ARSITEKTUR ASMERANDA.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Jalankan Asmeranda AI (Localhost)"; Filename: "{app}\run_local.bat"

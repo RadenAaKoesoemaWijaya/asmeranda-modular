@@ -61,9 +61,15 @@ class EdaCorrelationResponse(BaseModel):
 # Preprocessing
 # ---------------------------------------------------------------------------
 class FeatureSelectionConfig(BaseModel):
-    method: str = "none"  # none|variance|correlation|kbest|rfe
+    method: str = "none"  # none|variance|correlation|kbest|rfe|genetic
     max_features: int = 10
     threshold: float = 0.05
+    population_size: int = 30
+    generations: int = 20
+    crossover_rate: float = 0.8
+    mutation_rate: Optional[float] = None
+    parsimony_weight: float = 0.1
+    early_stopping_rounds: int = 5
 
 
 class ImbalanceConfig(BaseModel):
